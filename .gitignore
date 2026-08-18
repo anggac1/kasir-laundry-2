@@ -1,0 +1,26 @@
+# Folder yang dibuat otomatis oleh Flutter saat build.
+# Tidak perlu ikut disimpan di GitHub.
+.dart_tool/
+.packages
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+pubspec.lock
+
+# Kerangka Android dibuat ulang otomatis oleh GitHub Actions.
+android/
+ios/
+web/
+linux/
+macos/
+windows/
+test/
+
+# Editor
+.idea/
+.vscode/
+*.iml
+
+# Sistem
+.DS_Store
+Thumbs.db

@@ -1,0 +1,74 @@
+// ============================================================
+// Tambalan Gradle untuk proyek ini
+// ============================================================
+//
+// PENTING: blok ini harus berada di BAGIAN ATAS android/build.gradle,
+// bukan ditambahkan di bawah.
+//
+// Alasannya, di bagian bawah berkas itu Flutter memanggil
+//   subprojects { project.evaluationDependsOn(':app') }
+// yang langsung memaksa semua subproject dievaluasi. Kalau tambalan
+// ini diletakkan sesudahnya, Gradle menolak dengan pesan
+// "Cannot run Project.afterEvaluate(Closure) when the project is
+// already evaluated."
+
+
+// ------------------------------------------------------------
+// 1. Menyeragamkan versi Kotlin standard library
+// ------------------------------------------------------------
+//
+// Sejak Kotlin 1.8, isi kotlin-stdlib-jdk7 dan kotlin-stdlib-jdk8
+// DILEBUR ke dalam kotlin-stdlib. Kedua artefak lama itu masih
+// diterbitkan, tapi hanya sebagai cangkang kosong.
+//
+// Masalah muncul kalau satu plugin menarik versi lama (1.7.10)
+// sementara plugin lain menarik versi baru (1.8.10). Kelas yang sama
+// jadi ada di dua tempat sekaligus, dan Android Gradle Plugin
+// menghentikan build dengan:
+//
+//   Duplicate class kotlin.collections.jdk8.CollectionsJDK8Kt
+//   found in modules jetified-kotlin-stdlib-1.8.10 and
+//   jetified-kotlin-stdlib-jdk8-1.7.10
+//
+// Perbaikannya dengan memaksa kedua artefak lama ikut versi 1.8.10.
+// Di versi itu isinya sudah kosong, jadi tidak ada lagi kelas kembar.
+//
+// Yang dipaksa hanya jdk7 dan jdk8. kotlin-stdlib sendiri sengaja
+// dibiarkan bebas, supaya kalau nanti ada plugin yang butuh versi
+// lebih baru, tidak ikut terkunci mundur.
+allprojects {
+    configurations.all {
+        resolutionStrategy {
+            force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.10'
+            force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.10'
+        }
+    }
+}
+
+
+// ------------------------------------------------------------
+// 2. Mengisi namespace plugin lama
+// ------------------------------------------------------------
+//
+// Sebagian plugin Flutter lama belum mendeklarasikan "namespace",
+// yang sejak Android Gradle Plugin 8 menjadi wajib. Blok ini
+// mengisinya otomatis memakai group masing-masing plugin.
+//
+// try/catch dipasang sebagai pengaman: kalau ternyata ada subproject
+// yang sudah terlanjur dievaluasi, tambalannya dilewati begitu saja
+// dan build tetap lanjut.
+subprojects { sub ->
+    try {
+        sub.afterEvaluate { project ->
+            if (project.hasProperty('android')) {
+                if (project.android.namespace == null) {
+                    project.android.namespace = project.group.toString()
+                }
+            }
+        }
+    } catch (Exception diabaikan) {
+        // Subproject sudah dievaluasi lebih dulu.
+        // Berarti namespace-nya memang tidak bermasalah.
+    }
+}
+

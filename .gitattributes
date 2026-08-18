@@ -1,0 +1,11 @@
+# Berkas yang dieksekusi di runner Linux (GitHub Actions) harus
+# berakhiran LF. Kalau ikut diubah jadi CRLF oleh Windows, bash
+# akan gagal dengan pesan aneh seperti "$'\r': command not found".
+*.yml text eol=lf
+*.yaml text eol=lf
+*.sh text eol=lf
+*.gradle text eol=lf
+*.dart text eol=lf
+
+# Berkas Windows tetap CRLF.
+*.bat text eol=crlf
