@@ -30,6 +30,52 @@ jobs:
           channel: stable
           cache: true
 
+      # repo.maven.apache.org kadang membalas 403 Forbidden untuk
+      # permintaan dari runner GitHub, biasanya karena pembatasan lalu
+      # lintas. Init script ini menukar alamatnya ke mirror resmi yang
+      # dihosting Google. Isinya sama persis, hanya beda tempat.
+      #
+      # Init script dipakai, bukan mengubah build.gradle, karena yang
+      # gagal justru build bawaan Flutter sendiri (:gradle), yang
+      # berada di dalam folder SDK dan tidak bisa kita sentuh.
+      - name: Pasang mirror Maven Central
+        run: |
+          mkdir -p "$HOME/.gradle"
+          cat > "$HOME/.gradle/init.gradle" <<'EOF'
+          def MIRROR = 'https://maven-central.storage-download.googleapis.com/maven2/'
+
+          def tukarCentral = { repos ->
+              try {
+                  def perluTukar = repos.any { r ->
+                      r.hasProperty('url') && r.url != null &&
+                      r.url.toString().startsWith('https://repo.maven.apache.org')
+                  }
+                  if (perluTukar) {
+                      repos.removeAll { r ->
+                          r.hasProperty('url') && r.url != null &&
+                          r.url.toString().startsWith('https://repo.maven.apache.org')
+                      }
+                      repos.maven { url MIRROR }
+                  }
+              } catch (Exception diabaikan) {
+                  // Kalau bentuk repositori tidak dikenali, biarkan apa adanya.
+              }
+          }
+
+          beforeSettings { settings ->
+              try { tukarCentral(settings.pluginManagement.repositories) } catch (Exception e) { }
+              try { tukarCentral(settings.dependencyResolutionManagement.repositories) } catch (Exception e) { }
+          }
+
+          // afterProject, bukan beforeProject: repositori baru terdaftar
+          // setelah build.gradle proyek itu selesai dievaluasi.
+          afterProject { project ->
+              tukarCentral(project.repositories)
+          }
+          EOF
+          echo "--- init.gradle terpasang ---"
+          head -3 "$HOME/.gradle/init.gradle"
+
       - name: Simpan sementara berkas proyek
         run: |
           mkdir -p /tmp/simpan
@@ -63,8 +109,21 @@ jobs:
       - name: Ambil dependensi
         run: flutter pub get
 
+      # Diulang sampai tiga kali. Kegagalan unduh dari repositori
+      # publik sering hanya sesaat, dan mengulang jauh lebih murah
+      # daripada menjalankan ulang seluruh workflow.
       - name: Build APK release
-        run: flutter build apk --release
+        run: |
+          for i in 1 2 3; do
+            echo "=== Percobaan build ke-$i ==="
+            if flutter build apk --release; then
+              exit 0
+            fi
+            echo "Gagal. Menunggu 20 detik sebelum mencoba lagi..."
+            sleep 20
+          done
+          echo "Build tetap gagal setelah 3 percobaan."
+          exit 1
 
       - name: Ganti nama APK
         run: |

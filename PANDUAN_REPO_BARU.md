@@ -15,7 +15,7 @@ D:\Kuliah_ML\Claude\kasir-laundry-source
 | Langkah | Di mana | Perkiraan waktu |
 |---|---|---|
 | 1. Buat repo kosong | Browser | 1 menit |
-| 2. Jalankan `repo_baru.bat` | File Explorer | 2 menit |
+| 2. Jalankan `push_ke_github.bat` | File Explorer | 2 menit |
 | 3. Tunggu build | Browser, tab Actions | 5–10 menit |
 | 4. Unduh dan pasang APK | Browser lalu HP | 3 menit |
 | 5. Uji printer | HP | 2 menit |
@@ -50,14 +50,14 @@ Salin URL itu, atau cukup ingat namanya.
 
 ---
 
-## Langkah 2 — Jalankan repo_baru.bat
+## Langkah 2 — Jalankan push_ke_github.bat
 
 Buka folder `D:\Kuliah_ML\Claude\kasir-laundry-source` di File Explorer.
 
 **Klik dua kali** berkas:
 
 ```
-repo_baru.bat
+push_ke_github.bat
 ```
 
 Jendela hitam terbuka. Yang terjadi di dalamnya:
@@ -158,24 +158,18 @@ Kirim data: gagal di byte ke-256 dari 412
 
 ## Untuk Perubahan Berikutnya
 
-Setelah repo baru berdiri, Anda **tidak perlu menjalankan `repo_baru.bat` lagi** — script itu menghapus riwayat setiap kali dijalankan.
+Pakai script yang sama, `push_ke_github.bat`, untuk semua perubahan berikutnya. Tidak ada script kedua yang perlu diingat.
 
-Untuk mengirim perubahan selanjutnya, pakai:
-
-```
-push_ke_github.bat
-```
-
-Script itu sekarang juga ikut memperbarui `build.yml` dari `ci\build.yml.txt` secara otomatis setiap kali dijalankan, jadi workflow-nya tidak akan pernah tertinggal versi tanpa Anda sadari.
+Script itu juga ikut memperbarui `build.yml` dari `ci\build.yml.txt` setiap kali dijalankan, jadi workflow-nya tidak akan pernah tertinggal versi tanpa Anda sadari.
 
 ---
 
 ## Kalau Ada Yang Gagal
 
-**`repo_baru.bat` bilang Git belum terpasang**
+**`push_ke_github.bat` bilang Git belum terpasang**
 Unduh di [git-scm.com/download/win](https://git-scm.com/download/win), pasang dengan opsi bawaan, lalu jalankan script lagi.
 
-**`repo_baru.bat` bilang pubspec.yaml tidak ada**
+**`push_ke_github.bat` bilang pubspec.yaml tidak ada**
 Script dijalankan dari folder yang salah. Pastikan Anda mengklik dua kali berkasnya dari dalam `D:\Kuliah_ML\Claude\kasir-laundry-source`.
 
 **Gagal mengirim, muncul pesan authentication failed**

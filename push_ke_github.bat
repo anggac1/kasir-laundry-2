@@ -11,6 +11,9 @@ echo Script ini mengunggah proyek dengan struktur folder
 echo yang UTUH. Unggah lewat web sering meratakan folder
 echo dan membuat build gagal.
 echo.
+echo Bisa dipakai untuk repo yang sudah ada maupun repo
+echo yang baru saja dibuat kosong di GitHub.
+echo.
 
 REM ---- Cek Git --------------------------------------------------------
 where git >nul 2>nul

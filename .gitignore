@@ -24,3 +24,6 @@ test/
 # Sistem
 .DS_Store
 Thumbs.db
+
+# Folder tampungan berkas yang mau dihapus manual
+_to_delete/
