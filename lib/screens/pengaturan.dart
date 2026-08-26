@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../db/db.dart';
 import '../store/settings.dart';
+import '../ui/umum.dart';
 import 'debug_screen.dart';
 import 'ekspor_screen.dart';
 import 'printer_setup.dart';
@@ -23,73 +24,35 @@ class _PengaturanScreenState extends State<PengaturanScreen> {
     String? bantuan,
     TextInputType tipe = TextInputType.text,
   }) async {
-    final ctrl = TextEditingController(text: nilai);
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(judul),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          keyboardType: tipe,
-          decoration: InputDecoration(helperText: bantuan),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Batal')),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Simpan')),
-        ],
-      ),
+    final hasil = await dialogIsian(
+      context,
+      judul: judul,
+      awal: nilai,
+      bantuan: bantuan,
+      tipe: tipe,
     );
-    if (ok == true) {
-      await simpan(ctrl.text.trim());
-      if (mounted) setState(() {});
-    }
+    if (hasil == null) return;
+    await simpan(hasil.trim());
+    if (mounted) setState(() {});
   }
 
   Future<void> _tambahField() async {
-    final ctrl = TextEditingController();
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Field Tambahan Baru'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          textCapitalization: TextCapitalization.words,
-          decoration: const InputDecoration(
-            labelText: 'Nama field',
-            hintText: 'Parfum',
-            helperText: 'Placeholder dibuat otomatis dari nama ini',
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Batal')),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Tambah')),
-        ],
-      ),
+    final hasil = await dialogIsian(
+      context,
+      judul: 'Field Tambahan Baru',
+      label: 'Nama field',
+      bantuan: 'Placeholder dibuat otomatis dari nama ini',
     );
-    if (ok != true) return;
+    if (hasil == null) return;
 
-    final nama = ctrl.text.trim();
+    final nama = hasil.trim();
     if (nama.isEmpty) return;
 
     final daftar = [...s.fieldTambahan];
     final kunciBaru = Settings.kunciField(nama);
-    final bentrok =
-        daftar.any((f) => Settings.kunciField(f) == kunciBaru);
-    if (bentrok) {
+    if (daftar.any((f) => Settings.kunciField(f) == kunciBaru)) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Placeholder {$kunciBaru} sudah dipakai.')),
-        );
+        pesan(context, 'Placeholder {$kunciBaru} sudah dipakai.', galat: true);
       }
       return;
     }
@@ -100,58 +63,31 @@ class _PengaturanScreenState extends State<PengaturanScreen> {
   }
 
   Future<void> _hapusField(String nama) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Hapus field "$nama"?'),
-        content: const Text(
-            'Nota lama tidak berubah, isian yang sudah tersimpan tetap ada '
-            'di dalamnya. Hanya kolom isian di nota baru yang hilang.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Batal')),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Hapus'),
-          ),
-        ],
-      ),
+    final ok = await konfirmasiHapus(
+      context,
+      judul: 'Hapus field "$nama"?',
+      isi: 'Nota lama tidak berubah, isian yang sudah tersimpan tetap ada '
+          'di dalamnya. Hanya kolom isian di nota baru yang hilang.',
     );
-    if (ok != true) return;
+    if (!ok) return;
     final daftar = [...s.fieldTambahan]..remove(nama);
     await s.setFieldTambahan(daftar);
     if (mounted) setState(() {});
   }
 
   Future<void> _hapusSemua() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Hapus semua nota?'),
-        content: const Text(
-            'Seluruh nota dan riwayat transaksi akan dihapus permanen dari HP ini. '
-            'Daftar layanan dan pengaturan tetap aman.\n\n'
-            'Tidak ada cadangan di server, jadi data TIDAK bisa dikembalikan.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Batal')),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Hapus Semua'),
-          ),
-        ],
-      ),
+    final ok = await konfirmasiHapus(
+      context,
+      judul: 'Hapus semua nota?',
+      isi: 'Seluruh nota dan riwayat transaksi akan dihapus permanen dari '
+          'HP ini. Daftar layanan dan pengaturan tetap aman.\n\n'
+          'Tidak ada cadangan di server, jadi data TIDAK bisa dikembalikan.',
+      tombol: 'Hapus Semua',
     );
-    if (ok != true) return;
+    if (!ok) return;
     await DB.instance.kosongkanTransaksi();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Semua nota dihapus.')),
-    );
+    pesan(context, 'Semua nota dihapus.');
   }
 
   @override
@@ -160,7 +96,7 @@ class _PengaturanScreenState extends State<PengaturanScreen> {
       appBar: AppBar(title: const Text('Pengaturan')),
       body: ListView(
         children: [
-          _judul('Identitas Laundry'),
+          _seksi('Identitas Laundry'),
           ListTile(
             leading: const Icon(Icons.storefront_outlined),
             title: const Text('Nama laundry'),
@@ -196,7 +132,7 @@ class _PengaturanScreenState extends State<PengaturanScreen> {
             ),
           ),
           const Divider(),
-          _judul('Printer'),
+          _seksi('Printer'),
           ListTile(
             leading: const Icon(Icons.bluetooth),
             title: const Text('Pilih printer'),
@@ -242,17 +178,16 @@ class _PengaturanScreenState extends State<PengaturanScreen> {
           ),
           ListTile(
             leading: const Icon(Icons.tune),
-            title: const Text('Pakai profil RPP02N'),
+            title: const Text('Kembalikan ke setelan bawaan'),
             subtitle: const Text(
-                'Setel otomatis: 58mm, 32 karakter, Font A, tanpa pisau potong'),
+                'Bawaan: 58mm, 32 karakter, Font A, tanpa pisau potong. '
+                'Cocok untuk RPP02N.'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () async {
-              await s.terapkanProfilRpp02n();
+              await s.resetPrinter();
               if (!mounted) return;
               setState(() {});
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Profil RPP02N diterapkan.')),
-              );
+              pesan(context, 'Setelan printer dikembalikan ke bawaan.');
             },
           ),
           SwitchListTile(
@@ -275,12 +210,12 @@ class _PengaturanScreenState extends State<PengaturanScreen> {
               nilai: s.barisKosongAkhir.toString(),
               tipe: TextInputType.number,
               bantuan: 'Agar struk mudah disobek, biasanya 3-5',
-              simpan: (v) => s.setBarisKosongAkhir(
-                  int.tryParse(v) ?? s.barisKosongAkhir),
+              simpan: (v) =>
+                  s.setBarisKosongAkhir(int.tryParse(v) ?? s.barisKosongAkhir),
             ),
           ),
           const Divider(),
-          _judul('Salinan Struk'),
+          _seksi('Salinan Struk'),
           ListTile(
             leading: const Icon(Icons.copy_all_outlined),
             title: const Text('Jumlah lembar bawaan'),
@@ -326,7 +261,7 @@ class _PengaturanScreenState extends State<PengaturanScreen> {
           ),
 
           const Divider(),
-          _judul('Field Tambahan'),
+          _seksi('Field Tambahan'),
           const Padding(
             padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: Text(
@@ -361,7 +296,7 @@ class _PengaturanScreenState extends State<PengaturanScreen> {
           ),
 
           const Divider(),
-          _judul('Nota'),
+          _seksi('Nota'),
           ListTile(
             leading: Icon(s.pakaiEstimasi ? Icons.login : Icons.check_circle_outline),
             title: const Text('Kebiasaan nota'),
@@ -403,7 +338,7 @@ class _PengaturanScreenState extends State<PengaturanScreen> {
             ),
           ),
           const Divider(),
-          _judul('Data'),
+          _seksi('Data'),
           const ListTile(
             leading: Icon(Icons.storage_outlined),
             title: Text('Lokasi penyimpanan'),
@@ -457,10 +392,9 @@ class _PengaturanScreenState extends State<PengaturanScreen> {
     );
   }
 
-  Widget _judul(String t) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 20, 16, 6),
-        child: Text(t,
-            style: const TextStyle(
-                fontWeight: FontWeight.bold, color: Colors.grey)),
+  // JudulSeksi berpadding kecil, digeser agar sejajar dengan ListTile.
+  Widget _seksi(String teks) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: JudulSeksi(teks),
       );
 }

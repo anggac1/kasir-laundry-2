@@ -5,6 +5,7 @@ import '../print/escpos.dart';
 import '../print/printer_service.dart';
 import '../print/receipt.dart';
 import '../store/settings.dart';
+import '../ui/umum.dart';
 import 'pratinjau.dart';
 
 class PrinterSetupScreen extends StatefulWidget {
@@ -27,19 +28,14 @@ class _PrinterSetupScreenState extends State<PrinterSetupScreen> {
     _periksa(mintaIzin: false);
   }
 
-  void _pesan(String t, {bool galat = false}) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(
-        content: Text(t),
-        backgroundColor: galat ? Colors.red.shade700 : null,
-        duration: const Duration(seconds: 4),
-      ));
+  // Dilepas lewat variabel, bukan hanya lewat setState, supaya tombol tidak
+  // ikut terkunci selamanya kalau layar sudah tidak terpasang.
+  void _lepasSibuk() {
+    _sibuk = false;
+    _kegiatan = '';
+    if (mounted) setState(() {});
   }
 
-  /// Selalu selesai. Semua panggilan Bluetooth sudah dibatasi waktunya
-  /// di PrinterService, jadi layar ini tidak mungkin berputar selamanya.
   Future<void> _periksa({required bool mintaIzin}) async {
     if (_sibuk) return;
     setState(() {
@@ -48,15 +44,9 @@ class _PrinterSetupScreenState extends State<PrinterSetupScreen> {
     });
     try {
       final d = await PrinterService.instance.periksa(mintaIzinDulu: mintaIzin);
-      if (!mounted) return;
-      setState(() => _diagnosa = d);
+      if (mounted) setState(() => _diagnosa = d);
     } finally {
-      if (mounted) {
-        setState(() {
-          _sibuk = false;
-          _kegiatan = '';
-        });
-      }
+      _lepasSibuk();
     }
   }
 
@@ -64,24 +54,22 @@ class _PrinterSetupScreenState extends State<PrinterSetupScreen> {
     await s.setPrinter(b.macAdress, b.name);
     if (!mounted) return;
     setState(() {});
-    _pesan('Printer "${b.name}" dipilih.');
+    pesan(context, 'Printer "${b.name}" dipilih.');
   }
 
-  /// Tes cetak SELALU lewat pratinjau lebih dulu.
-  ///
-  /// Sebelumnya tombol ini langsung mencetak, dan gampang tertukar dengan
-  /// mencetak struk sungguhan — apalagi kalau ditekan tepat setelah
-  /// printer baru tersambung. Sekarang isinya terlihat dulu, dan jelas
-  /// tertulis bahwa ini contoh, bukan nota pelanggan.
+  // Lewat pratinjau dulu supaya jelas ini contoh, bukan nota pelanggan.
   Future<void> _tesCetak() async {
     final cfg = StrukConfig.dari(s);
     final l = cfg.lebarKertas;
+    // Kelipatan bisa 0 pada kertas sangat sempit, dan operator * menolak
+    // bilangan negatif.
+    final ulang = (l ~/ 10).clamp(0, 20);
     final baris = <BarisStruk>[
       const BarisStruk('CONTOH', rata: 1, tebal: true, besar: true),
       const BarisStruk('BUKAN STRUK PELANGGAN', rata: 1, tebal: true),
       BarisStruk('-' * l),
       BarisStruk('Lebar kertas: $l karakter'),
-      BarisStruk('1234567890' * (l ~/ 10)),
+      BarisStruk('1234567890' * ulang),
       const BarisStruk('Rata kiri'),
       const BarisStruk('Rata tengah', rata: 1),
       const BarisStruk('Rata kanan', rata: 2),
@@ -109,20 +97,20 @@ class _PrinterSetupScreenState extends State<PrinterSetupScreen> {
       _kegiatan = 'Mengirim tes cetak...';
     });
 
-    final bytes = EscPos.dariBaris(baris,
-        barisKosongAkhir: s.barisKosongAkhir,
-        potongKertas: s.potongKertas,
-        fontKecil: s.fontKecil);
-
-    final hasil = await PrinterService.instance.kirim(bytes);
+    final HasilCetak hasil;
+    try {
+      final bytes = EscPos.dariBaris(baris,
+          barisKosongAkhir: s.barisKosongAkhir,
+          potongKertas: s.potongKertas,
+          fontKecil: s.fontKecil);
+      hasil = await PrinterService.instance.kirim(bytes);
+    } finally {
+      _lepasSibuk();
+    }
     if (!mounted) return;
-    setState(() {
-      _sibuk = false;
-      _kegiatan = '';
-    });
 
     if (hasil.sukses) {
-      _pesan(hasil.pesan);
+      pesan(context, hasil.pesan);
       return;
     }
 
@@ -142,23 +130,7 @@ class _PrinterSetupScreenState extends State<PrinterSetupScreen> {
               const Text('Rincian langkah:',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
               const SizedBox(height: 6),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E1E1E),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: SelectableText(
-                  hasil.rincian,
-                  style: const TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 11,
-                    height: 1.4,
-                    color: Color(0xFFD4D4D4),
-                  ),
-                ),
-              ),
+              KotakKode(hasil.rincian),
             ],
           ),
         ),
@@ -320,20 +292,14 @@ class _PrinterSetupScreenState extends State<PrinterSetupScreen> {
   }
 
   Widget _kartuStatus(DiagnosaPrinter d) {
-    Widget baris(String label, bool ok, String nilai) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 3),
-          child: Row(
-            children: [
-              Icon(ok ? Icons.check_circle : Icons.cancel,
-                  size: 16,
-                  color: ok ? Colors.green.shade700 : Colors.red.shade700),
-              const SizedBox(width: 8),
-              Text('$label: ', style: const TextStyle(fontSize: 12)),
-              Text(nilai,
-                  style: const TextStyle(
-                      fontSize: 12, fontWeight: FontWeight.bold)),
-            ],
-          ),
+    Widget baris(String label, bool ok, String nilai) => Row(
+          children: [
+            Icon(ok ? Icons.check_circle : Icons.cancel,
+                size: 16,
+                color: ok ? Colors.green.shade700 : Colors.red.shade700),
+            const SizedBox(width: 8),
+            Expanded(child: BarisNilai(label, nilai, tebal: true)),
+          ],
         );
 
     return Container(

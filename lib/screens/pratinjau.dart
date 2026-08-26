@@ -4,14 +4,11 @@ import '../models/models.dart';
 import '../print/printer_service.dart';
 import '../print/receipt.dart';
 import '../store/settings.dart';
+import '../ui/umum.dart';
 import '../utils/fmt.dart';
 
-/// Gambar kertas struk di layar.
-///
-/// Tiap baris digambar dengan gaya aslinya, bukan sekadar teks polos.
-/// Ini penting karena tag [H] memperbesar huruf dan [B] menebalkannya —
-/// kalau pratinjau memakai satu ukuran huruf untuk semua baris, kedua tag
-/// itu terlihat seolah tidak berfungsi padahal hasil cetaknya benar.
+// Tiap baris digambar dengan gaya aslinya, bukan teks polos, supaya tag
+// [H] dan [B] tidak terlihat seolah tidak berfungsi di pratinjau.
 class KertasStruk extends StatelessWidget {
   final List<BarisStruk> baris;
   final int lebar;
@@ -20,19 +17,11 @@ class KertasStruk extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: Colors.grey.shade400),
-        borderRadius: BorderRadius.circular(4),
-      ),
+    return KertasPutih(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: baris.map((b) {
-          // Baris berhuruf besar hanya muat separuh jumlah karakter.
-          final efektif = b.besar ? (lebar ~/ 2) : lebar;
+          final efektif = Struk.lebarEfektif(lebar, b.besar);
           var t = b.teks;
           if (t.length > efektif) t = t.substring(0, efektif);
 
@@ -55,8 +44,7 @@ class KertasStruk extends StatelessWidget {
   }
 }
 
-/// Pratinjau umum dari sekumpulan baris siap cetak.
-/// Mengembalikan true kalau pengguna menekan tombol cetak.
+// Pratinjau sekumpulan baris siap cetak. True bila pengguna menekan cetak.
 Future<bool> tampilkanPratinjauBaris(
   BuildContext context,
   List<BarisStruk> baris, {
@@ -113,7 +101,7 @@ Future<bool> tampilkanPratinjauBaris(
   return hasil ?? false;
 }
 
-/// Pratinjau struk sebuah nota, lengkap dengan semua salinannya.
+// Pratinjau struk sebuah nota, lengkap dengan semua salinannya.
 Future<bool> tampilkanPratinjau(
   BuildContext context,
   Nota nota, {

@@ -70,44 +70,40 @@ Kalau C: Anda lega, biarkan saja. Kalau sempit, dua yang pertama bisa dipindah l
 
 ## Yang Perlu Diunduh
 
-Panduan ini sengaja **menghindari Android Studio**. Aplikasi itu berukuran 4 GB lebih, dan satu-satunya yang kita butuhkan darinya adalah Android SDK, yang bisa dipasang sendiri sebesar 700 MB.
+**3 aplikasi yang diinstal lewat installer:**
 
-**Hanya 2 aplikasi yang benar-benar diinstal:**
-
-| Aplikasi | Ukuran | Kenapa perlu installer |
+| Aplikasi | Ukuran | Tujuan |
 |---|---|---|
 | Visual Studio Code | ~400 MB | Editor utama |
 | Git for Windows | ~300 MB | Flutter memanggilnya secara internal |
+| Android Studio | ~5 GB | Emulator Android, device inspector, build tools |
 
-**Sisanya cuma ZIP yang diekstrak** — tidak muncul di Add/Remove Programs, tidak menyentuh registry, cukup dihapus foldernya kalau tidak dipakai lagi:
+**Sisanya cuma ZIP yang diekstrak** — tidak muncul di Add/Remove Programs, tidak menyentuh registry:
 
 | Komponen | Unduh | Setelah ekstrak |
 |---|---|---|
 | Flutter SDK 3.22.3 | ~1 GB | ~2,5 GB |
 | JDK 17 | ~190 MB | ~300 MB |
-| Android cmdline-tools | ~150 MB | ~700 MB dengan komponennya |
 
-> **Soal JDK 17:** halaman utama Temurin hanya menonjolkan format `.msi`. Itu tidak masalah — Java tidak menulis ke foldernya sendiri, jadi installer aman dan lokasinya pun bisa diarahkan ke D: saat wizard berjalan. Kalau tetap mau versi ZIP, ada di Microsoft Build of OpenJDK. Ketiga jalurnya di langkah 5.
+**Total sekitar 7 GB**, plus Android Studio 5 GB = 12 GB. Sediakan ruang kosong 15 GB di D: supaya lega saat build dan emulator berjalan.
 
-**Total sekitar 4 GB**, bukan 11 GB seperti kalau memakai Android Studio. Sediakan ruang kosong 10 GB di D: supaya lega saat build.
-
-Emulator Android tidak diunduh — hemat 8 GB lagi. Testing pakai HP asli lewat kabel USB lebih cepat, dan wajib kalau mau menguji printer Bluetooth karena emulator tidak punya Bluetooth sama sekali.
+Android Studio memberikan emulator Android bawaan yang bisa disimulasikan real-time tanpa HP fisik — ini sangat membantu saat pertama kali belajar, meski untuk menguji Bluetooth printer tetap harus pakai HP asli.
 
 ### Susunan folder yang dituju
 
 ```
 D:\Aplikasi\
-├── flutter\           Flutter SDK 3.22.3
-├── jdk17\             Java 17
-├── android-sdk\       Android SDK
-│   ├── cmdline-tools\latest\
-│   ├── platform-tools\
-│   ├── platforms\android-34\
-│   └── build-tools\34.0.0\
-└── cache\             opsional, pemindahan cache dari C:
-    ├── gradle\
-    └── pub\
+├── flutter\              Flutter SDK 3.22.3
+├── jdk17\                Java 17
+└── Android Studio\       Android Studio + SDK built-in
+
+Dan di C:\Users\<nama>\ (otomatis dibuat):
+├── .gradle\              Gradle cache (2–5 GB)
+├── AppData\Local\Pub\Cache\  Pub cache (300 MB–1 GB)
+└── .android\             Android adb & emulator configs
 ```
+
+Cache di C: bisa dipindah ke D: lewat environment variable kalau C: sempit — lihat langkah 7d.
 
 ---
 
@@ -189,33 +185,15 @@ Ekstrak ke `D:\Aplikasi\flutter`.
 
 Java 17 dipilih karena Flutter 3.22.3 dan Gradle-nya tidak cocok dengan Java 21. Ketidakcocokan ini muncul sebagai error `Unsupported class file major version 65` yang sama sekali tidak menyebut Java sebagai penyebabnya.
 
-### Installer .msi tidak masalah untuk Java
+**Unduh:** [adoptium.net/temurin/releases/?version=17](https://adoptium.net/temurin/releases/?version=17) → Windows x64 → **paket .msi**
 
-Berbeda dengan Flutter dan Android SDK, **Java tidak pernah menulis ke foldernya sendiri** saat berjalan. Jadi memasangnya lewat installer, bahkan ke `C:\Program Files`, tidak menimbulkan masalah izin. Aturan "hindari Program Files" di panduan ini hanya berlaku untuk Flutter dan Android SDK.
-
-Tiga pilihan, semuanya benar:
-
-**Pilihan A — pakai .msi, arahkan ke D: (paling praktis)**
-
-[adoptium.net/temurin/releases/?version=17](https://adoptium.net/temurin/releases/?version=17) → Windows x64 → unduh **.msi**
-
-Saat wizard berjalan, jangan langsung Next sampai habis. Pilih **Custom Setup** → klik tombol **Change...** → arahkan ke `D:\Aplikasi\jdk17`. Aktifkan juga opsi **Set JAVA_HOME variable** kalau ditawarkan, itu menghemat satu langkah di nomor 7.
-
-**Pilihan B — Microsoft Build of OpenJDK, tersedia .zip**
-
-[learn.microsoft.com/java/openjdk/download](https://learn.microsoft.com/en-us/java/openjdk/download) → cari baris **Java 17 → Windows x64 → zip**
-
-OpenJDK yang sama, hanya dikemas Microsoft, sepenuhnya kompatibel untuk build Android.
-
-**Pilihan C — Temurin .zip dari GitHub**
-
-[github.com/adoptium/temurin17-binaries/releases](https://github.com/adoptium/temurin17-binaries/releases) → cari `OpenJDK17U-jdk_x64_windows_hotspot_*.zip`
-
-### Apa pun pilihannya
+Saat wizard berjalan:
+1. Pilih **Custom Setup**
+2. Klik **Change** → arahkan ke `D:\Aplikasi\jdk17`
+3. Centang **Set JAVA_HOME variable** kalau ada pilihan itu
+4. Next sampai selesai
 
 **Patokan benar:** ada berkas `D:\Aplikasi\jdk17\bin\java.exe`
-
-> Hati-hati kalau memilih ZIP: isinya biasanya sudah terbungkus folder bernama `jdk-17.0.x+y`. Ekstrak apa adanya menghasilkan `D:\Aplikasi\jdk17\jdk-17.0.13+11\bin\java.exe` — satu tingkat terlalu dalam. Pindahkan isinya naik satu level.
 
 Cek hasilnya:
 
@@ -225,63 +203,23 @@ Cek hasilnya:
 D:\Aplikasi\jdk17\bin\java -version
 ```
 
-Harus muncul tulisan `openjdk version "17.x.x"`. Kalau muncul `system cannot find the path`, berarti struktur foldernya belum benar.
+Harus muncul tulisan `openjdk version "17.x.x"`.
 
 ---
 
-## 6. Android SDK tanpa Android Studio
+## 6. Android Studio
 
-**Unduh:** [developer.android.com/studio](https://developer.android.com/studio) → gulir jauh ke bawah ke bagian **"Command line tools only"** → ambil versi Windows
+**Unduh:** [developer.android.com/studio](https://developer.android.com/studio) → ambil tombol besar **Download Android Studio**
 
-> Jangan ambil tombol besar Android Studio di bagian atas halaman. Yang kita butuhkan ada di tabel kecil jauh di bawah.
+Saat wizard berjalan:
+1. Ikuti instalasi bawaan sampai selesai — jangan ubah lokasi default (akan ke `C:\Program Files\Android\Android Studio`)
+2. Setelah selesai, Android Studio akan membuka dan menawarkan setup wizard pertama
+3. Pilih **Standard** (bukan Custom) dan biarkan ia mengunduh SDK, emulator, dan build tools
+4. Tunggu sampai tulisan "Finishing setup" muncul — proses ini bisa 10–30 menit bergantung kecepatan internet
 
-### Susunan foldernya rewel, ikuti persis
+Android Studio sekarang sudah siap, dan SDK-nya sudah terintegrasi otomatis. **Jangan buka proyek dari Android Studio** — kita pakai VS Code saja, hanya emulator Android Studio yang kita manfaatkan.
 
-ZIP-nya berisi folder bernama `cmdline-tools`. Google mewajibkan struktur berikut, dan kalau salah, `sdkmanager` menolak berjalan dengan pesan yang tidak menjelaskan apa-apa:
-
-```
-D:\Aplikasi\android-sdk\cmdline-tools\latest\bin\sdkmanager.bat
-```
-
-Perhatikan kata **`latest`** di tengah. Langkahnya, semua lewat File Explorer biasa:
-
-1. Buat folder `D:\Aplikasi\android-sdk\cmdline-tools`
-2. Ekstrak ZIP yang tadi diunduh, akan muncul folder bernama `cmdline-tools`
-3. **Ganti nama** folder hasil ekstrak itu menjadi `latest`
-4. Pindahkan folder `latest` ke dalam `D:\Aplikasi\android-sdk\cmdline-tools`
-
-**Patokan benar:** buka `D:\Aplikasi\android-sdk\cmdline-tools\latest\bin` — harus ada berkas `sdkmanager.bat` di dalamnya.
-
-### Pasang komponennya
-
-> **Jendela A — Command Prompt.** Tombol Windows → ketik `cmd` → Enter.
-> Ketik baris pertama, Enter, lalu baris kedua, Enter, dan seterusnya. Jangan ditempel sekaligus.
-
-```
-set JAVA_HOME=D:\Aplikasi\jdk17
-```
-
-```
-cd /d D:\Aplikasi\android-sdk\cmdline-tools\latest\bin
-```
-
-```
-sdkmanager --sdk_root=D:\Aplikasi\android-sdk "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-```
-
-Unduhan berjalan beberapa menit. Kalau ada pertanyaan lisensi, ketik `y` lalu Enter.
-
-Setelah selesai, masih di jendela CMD yang sama:
-
-```
-sdkmanager --sdk_root=D:\Aplikasi\android-sdk --licenses
-```
-
-Ketik `y` lalu Enter untuk setiap pertanyaan sampai habis.
-
-Selesai. Anda baru saja menghemat 4 GB dan satu aplikasi besar.
-
-> `flutter doctor` nanti akan menandai **Android Studio: not installed**. Itu peringatan, bukan error — abaikan selama baris **Android toolchain** bercentang hijau.
+Tutup Android Studio setelah setup selesai.
 
 ---
 
@@ -300,10 +238,8 @@ Di kotak atas, klik tombol **New...** untuk masing-masing baris berikut. Isi kol
 | Variable name | Variable value |
 |---|---|
 | `JAVA_HOME` | `D:\Aplikasi\jdk17` |
-| `ANDROID_HOME` | `D:\Aplikasi\android-sdk` |
-| `ANDROID_SDK_ROOT` | `D:\Aplikasi\android-sdk` |
 
-Kalau tadi Anda memasang JDK lewat .msi dan mencentang "Set JAVA_HOME", variabel `JAVA_HOME` mungkin sudah ada. Klik **Edit** dan pastikan isinya `D:\Aplikasi\jdk17`.
+Kalau tadi Anda mencentang "Set JAVA_HOME" saat memasang JDK, variabel ini mungkin sudah ada. Klik **Edit** dan pastikan isinya persis `D:\Aplikasi\jdk17`.
 
 Dua variabel berikut **opsional**, isi kalau ingin cache besar tidak menumpuk di C:
 
@@ -318,19 +254,13 @@ Buat dulu folder `D:\Aplikasi\cache\gradle` dan `D:\Aplikasi\cache\pub` lewat Fi
 
 Masih di kotak atas, cari baris bernama **Path** → klik sekali untuk menyorotnya → klik **Edit...**
 
-Muncul jendela berisi daftar. Klik **New** lalu ketik satu baris, ulangi tiga kali:
+Muncul jendela berisi daftar. Klik **New** lalu ketik:
 
 ```
 D:\Aplikasi\flutter\bin
 ```
-```
-D:\Aplikasi\android-sdk\platform-tools
-```
-```
-D:\Aplikasi\android-sdk\cmdline-tools\latest\bin
-```
 
-Klik **OK** di ketiga jendela sampai semuanya tertutup.
+Klik **OK** sampai semua jendela tertutup. Android SDK otomatis sudah ada di PATH sejak Android Studio selesai setup, tidak perlu ditambah manual.
 
 ### 7c. Tutup semua jendela
 
@@ -338,7 +268,7 @@ Klik **OK** di ketiga jendela sampai semuanya tertutup.
 
 ---
 
-## 8. Beri Tahu Flutter Lokasi SDK
+## 8. Arahkan Flutter ke Lokasi JDK
 
 > **Jendela A — Command Prompt BARU.** Tombol Windows → ketik `cmd` → Enter.
 > Harus jendela yang baru dibuka setelah langkah 7c, bukan yang lama.
@@ -354,14 +284,10 @@ Harus muncul `Flutter 3.22.3`. Kalau muncul `'flutter' is not recognized`, berar
 Kalau sudah benar, lanjutkan di jendela yang sama:
 
 ```
-flutter config --android-sdk D:\Aplikasi\android-sdk
-```
-
-```
 flutter config --jdk-dir D:\Aplikasi\jdk17
 ```
 
-Dua perintah ini menyimpan lokasi SDK ke dalam pengaturan Flutter, jadi hanya perlu dijalankan **sekali seumur hidup** di laptop ini. Tidak perlu diulang tiap kali membuka proyek.
+Perintah ini menyimpan lokasi JDK ke dalam pengaturan Flutter. Android SDK sudah terdeteksi otomatis dari Android Studio, jadi tidak perlu dikonfigurasi manual.
 
 Setujui lisensi Android, masih di jendela yang sama:
 
@@ -381,14 +307,14 @@ Ketik `y` lalu Enter untuk setiap pertanyaan.
 flutter doctor -v
 ```
 
-Yang perlu bercentang hijau hanya dua:
+Yang perlu bercentang hijau tiga:
 
 - **Flutter**
 - **Android toolchain**
+- **Android Studio** (sekarang ada, karena sudah diinstal)
 
 Yang lain boleh diabaikan:
 
-- **Android Studio: not installed** — memang sengaja, kita pakai command-line tools
 - **Visual Studio** — itu untuk aplikasi Windows desktop, bukan Android
 - **Chrome** — untuk Flutter Web
 
@@ -398,16 +324,13 @@ Yang lain boleh diabaikan:
 Path belum aktif. Ulangi langkah 7b, lalu tutup semua CMD dan buka baru.
 
 **`Unable to locate Android SDK`**
-Ulangi `flutter config --android-sdk D:\Aplikasi\android-sdk` di langkah 8.
-
-**`cmdline-tools component is missing`**
-Struktur foldernya salah. Harus persis `android-sdk\cmdline-tools\latest\bin\sdkmanager.bat` — perhatikan kata `latest` di tengah. Ulangi langkah 6.
+Android Studio setup belum selesai dengan benar. Buka Android Studio lagi, biarkan ia menyelesaikan setup awal sampai muncul "Finishing setup".
 
 **`Android license status unknown`**
 Jalankan `flutter doctor --android-licenses`, ketik `y` untuk semua pertanyaan.
 
 **`Unsupported class file major version 65`**
-Java yang terpakai versi 21. Cek `JAVA_HOME` menunjuk ke `D:\Aplikasi\jdk17`, lalu ulangi `flutter config --jdk-dir D:\Aplikasi\jdk17`.
+Java yang terpakai versi 21. Cek bahwa `D:\Aplikasi\jdk17\bin\java -version` menampilkan Java 17, lalu ulangi `flutter config --jdk-dir D:\Aplikasi\jdk17`.
 
 ---
 
@@ -569,10 +492,7 @@ Hasilnya di `build\app\outputs\flutter-apk\app-release.apk` di dalam folder proy
 |---|---|---|
 | `code --install-extension ...` | CMD | Sekali, langkah 2 |
 | `D:\Aplikasi\jdk17\bin\java -version` | CMD | Sekali, mengecek JDK |
-| `sdkmanager --sdk_root=... "platform-tools" ...` | CMD | Sekali, langkah 6 |
-| `sdkmanager --sdk_root=... --licenses` | CMD | Sekali, langkah 6 |
 | `flutter --version` | CMD | Sekali, mengecek Flutter |
-| `flutter config --android-sdk ...` | CMD | Sekali seumur hidup |
 | `flutter config --jdk-dir ...` | CMD | Sekali seumur hidup |
 | `flutter doctor --android-licenses` | CMD | Sekali |
 | `flutter doctor -v` | CMD | Kapan saja, saat mengecek |
@@ -583,22 +503,23 @@ Hasilnya di `build\app\outputs\flutter-apk\app-release.apk` di dalam folder proy
 
 CMD boleh dibuka dari mana saja — perintah setup tidak peduli posisi foldernya. Terminal VS Code harus berada di folder proyek, dan itu otomatis kalau Anda membuka foldernya dulu di VS Code.
 
+**Android Studio** dibuka terpisah untuk setup wizard awal saja, setelah itu tidak perlu dibuka lagi — Flutter dan VS Code akan otomatis memanggil SDK-nya.
+
 ---
 
 ## Urutan Pemasangan yang Disarankan
 
 1. Git for Windows — paling kecil, cepat
 2. Visual Studio Code + ekstensinya
-3. Pasang JDK 17 ke `D:\Aplikasi\jdk17` — lewat .msi dengan Custom Setup, atau ekstrak ZIP dari Microsoft
-4. Ekstrak Flutter 3.22.3 ke `D:\Aplikasi\flutter`
-5. Ekstrak Android cmdline-tools ke `D:\Aplikasi\android-sdk\cmdline-tools\latest`
-6. Buat Environment Variable dan Path — **lalu tutup semua CMD dan VS Code**
-7. CMD baru: `sdkmanager --sdk_root=... "platform-tools" "platforms;android-34" "build-tools;34.0.0"`
-8. CMD: `flutter config --android-sdk ...` dan `flutter config --jdk-dir ...`
-9. CMD: `flutter doctor --android-licenses`
-10. CMD: `flutter doctor -v` — pastikan dua baris pertama hijau
-11. HP: aktifkan USB Debugging, colok kabel, cek `flutter devices`
-12. File Explorer: klik dua kali `setup_lokal.bat` di folder proyek
-13. VS Code: buka folder proyek, tekan **F5**
+3. Pasang JDK 17 ke `D:\Aplikasi\jdk17` — lewat .msi dengan Custom Setup
+4. Pasang Android Studio — biarkan wizard setup selesai dengan unduh SDK, emulator, build tools (~30 menit)
+5. Ekstrak Flutter 3.22.3 ke `D:\Aplikasi\flutter`
+6. Buat Environment Variable JAVA_HOME dan Path untuk Flutter — **lalu tutup semua CMD dan VS Code**
+7. CMD baru: `flutter config --jdk-dir D:\Aplikasi\jdk17`
+8. CMD: `flutter doctor --android-licenses` (ketik y untuk semua)
+9. CMD: `flutter doctor -v` — pastikan tiga baris utama hijau
+10. HP: aktifkan USB Debugging, colok kabel, cek `flutter devices`
+11. File Explorer: klik dua kali `setup_lokal.bat` di folder proyek
+12. VS Code: buka folder proyek, tekan **F5**
 
-Sekitar 1 jam, mayoritas hanya menunggu unduhan.
+Sekitar 1.5–2 jam, mayoritas hanya menunggu Android Studio dan Flutter unduh engine.

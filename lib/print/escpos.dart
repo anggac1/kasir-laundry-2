@@ -1,108 +1,94 @@
 import 'receipt.dart';
 
-/// Penyusun byte ESC/POS untuk printer thermal.
-/// Ditulis sendiri (tanpa paket tambahan) supaya dependensi build minimal
-/// dan perilakunya bisa dipastikan.
+// Penyusun byte ESC/POS. Ditulis sendiri tanpa paket tambahan supaya
+// dependensi build minimal dan perilakunya bisa dipastikan.
 class EscPos {
-  final List<int> _b = [];
-
-  // Perintah dasar ESC/POS
   static const _esc = 0x1B;
   static const _gs = 0x1D;
 
+  // 0 kiri, 1 tengah, 2 kanan.
+  static const rataKiri = 0;
+  static const rataTengah = 1;
+  static const rataKanan = 2;
+
+  final List<int> _b = [];
+
   void init({bool fontKecil = false}) {
-    _b.addAll([_esc, 0x40]); // ESC @  : reset printer
-    _b.addAll([_esc, 0x74, 0x00]); // ESC t 0 : code page PC437
-    _b.addAll([_esc, 0x52, 0x00]); // ESC R 0 : charset USA
-    // ESC M n : 0 = Font A (12x24, 32 kolom), 1 = Font B (9x17, 42 kolom)
+    _b.addAll([_esc, 0x40]); // ESC @  reset
+    _b.addAll([_esc, 0x74, 0x00]); // ESC t  code page PC437
+    _b.addAll([_esc, 0x52, 0x00]); // ESC R  charset USA
+    // ESC M  0 = Font A (32 kolom), 1 = Font B (42 kolom)
     _b.addAll([_esc, 0x4D, fontKecil ? 0x01 : 0x00]);
   }
 
-  void rata(int n) => _b.addAll([_esc, 0x61, n.clamp(0, 2)]);
+  void rata(int n) => _b.addAll([_esc, 0x61, n.clamp(rataKiri, rataKanan)]);
 
   void tebal(bool on) => _b.addAll([_esc, 0x45, on ? 1 : 0]);
 
-  /// Perbesar huruf jadi dua kali lebar dan dua kali tinggi.
-  ///
-  /// Dikirim DUA perintah sekaligus, karena printer murah tidak seragam:
-  ///   GS  ! n  -> standar, dipakai mayoritas printer
-  ///   ESC ! n  -> dipahami sebagian printer lama yang mengabaikan GS !
-  ///
-  /// Bit ukuran pada ESC ! : 0x10 tinggi dobel, 0x20 lebar dobel.
-  /// Bit tebal pada ESC ! sengaja TIDAK dipakai, supaya tidak bentrok
-  /// dengan ESC E yang mengurus tebal secara terpisah.
+  // Dua perintah sekaligus karena printer murah tidak seragam: GS ! dipahami
+  // mayoritas, ESC ! dipahami sebagian printer lama yang mengabaikan GS !.
   void besar(bool on) {
     _b.addAll([_gs, 0x21, on ? 0x11 : 0x00]);
     _b.addAll([_esc, 0x21, on ? 0x30 : 0x00]);
   }
 
   void teks(String s) {
-    _b.addAll(_encode(s));
+    _b.addAll(keAscii(s).codeUnits);
     _b.add(0x0A);
   }
 
-  void baris(int n) {
-    for (var i = 0; i < n; i++) {
-      _b.add(0x0A);
-    }
-  }
+  void baris(int n) => _b.addAll(List.filled(n.clamp(0, 20), 0x0A));
 
   void potong() {
     baris(3);
-    _b.addAll([_gs, 0x56, 0x00]); // GS V 0 : full cut
+    _b.addAll([_gs, 0x56, 0x00]); // GS V  full cut
   }
 
   List<int> selesai() => List<int>.unmodifiable(_b);
 
-  /// Printer thermal umumnya tidak paham UTF-8.
-  /// Huruf beraksen diturunkan ke ASCII, sisanya diganti '?'.
-  static List<int> _encode(String s) {
-    const map = {
-      'á': 'a', 'à': 'a', 'â': 'a', 'ä': 'a', 'ã': 'a', 'å': 'a',
-      'é': 'e', 'è': 'e', 'ê': 'e', 'ë': 'e',
-      'í': 'i', 'ì': 'i', 'î': 'i', 'ï': 'i',
-      'ó': 'o', 'ò': 'o', 'ô': 'o', 'ö': 'o', 'õ': 'o',
-      'ú': 'u', 'ù': 'u', 'û': 'u', 'ü': 'u',
-      'ñ': 'n', 'ç': 'c',
-      'Á': 'A', 'À': 'A', 'Â': 'A', 'Ä': 'A',
-      'É': 'E', 'È': 'E', 'Ê': 'E', 'Ë': 'E',
-      'Í': 'I', 'Ó': 'O', 'Ö': 'O', 'Ú': 'U', 'Ü': 'U',
-      'Ñ': 'N', 'Ç': 'C',
-      '“': '"', '”': '"', '‘': "'", '’': "'",
-      '–': '-', '—': '-', '…': '...', ' ': ' ',
-      'Rp': 'Rp',
-    };
-    final out = <int>[];
+  // Printer thermal tidak paham UTF-8. Huruf beraksen diturunkan ke ASCII,
+  // sisanya jadi '?'. Dipakai juga oleh receipt.dart untuk mengukur lebar
+  // baris, supaya perataan kiri-kanan tidak meleset pada teks non-ASCII.
+  static String keAscii(String s) {
+    final buf = StringBuffer();
     for (final ch in s.split('')) {
-      final g = map[ch] ?? ch;
-      for (final c in g.runes) {
-        out.add(c < 128 ? c : 0x3F); // di luar ASCII -> '?'
+      final ganti = _padanan[ch];
+      if (ganti != null) {
+        buf.write(ganti);
+        continue;
       }
+      buf.write(ch.codeUnitAt(0) < 128 ? ch : '?');
     }
-    return out;
+    return buf.toString();
   }
 
-  /// Ubah hasil render template menjadi byte siap kirim ke printer.
+  static const _padanan = {
+    'á': 'a', 'à': 'a', 'â': 'a', 'ä': 'a', 'ã': 'a', 'å': 'a',
+    'é': 'e', 'è': 'e', 'ê': 'e', 'ë': 'e',
+    'í': 'i', 'ì': 'i', 'î': 'i', 'ï': 'i',
+    'ó': 'o', 'ò': 'o', 'ô': 'o', 'ö': 'o', 'õ': 'o',
+    'ú': 'u', 'ù': 'u', 'û': 'u', 'ü': 'u',
+    'ñ': 'n', 'ç': 'c',
+    'Á': 'A', 'À': 'A', 'Â': 'A', 'Ä': 'A',
+    'É': 'E', 'È': 'E', 'Ê': 'E', 'Ë': 'E',
+    'Í': 'I', 'Ó': 'O', 'Ö': 'O', 'Ú': 'U', 'Ü': 'U',
+    'Ñ': 'N', 'Ç': 'C',
+    '“': '"', '”': '"', '‘': "'", '’': "'",
+    '–': '-', '—': '-', '…': '...', ' ': ' ',
+  };
+
+  // Ubah hasil render template jadi byte siap kirim.
   static List<int> dariBaris(
     List<BarisStruk> baris, {
     int barisKosongAkhir = 4,
     bool potongKertas = false,
     bool fontKecil = false,
   }) {
-    final p = EscPos();
-    p.init(fontKecil: fontKecil);
+    final p = EscPos()..init(fontKecil: fontKecil);
 
-    // Keadaan ditulis ulang di SETIAP baris, tidak dihemat dengan
-    // membandingkan baris sebelumnya.
-    //
-    // Alasannya, ESC ! juga membawa bit tebal pada sebagian printer.
-    // Kalau ukuran diubah tanpa menegaskan ulang tebal, huruf tebal bisa
-    // ikut hilang di baris berikutnya. Selisihnya hanya belasan byte
-    // per baris, jauh lebih murah daripada hasil cetak yang salah.
-    //
-    // Urutannya penting: ukuran dulu, baru tebal. ESC ! 0x00 yang
-    // dikirim untuk mengembalikan ukuran normal juga mematikan tebal
-    // di printer tertentu, jadi ESC E harus menyusul sesudahnya.
+    // Ukuran dan tebal ditegaskan ulang tiap baris, bukan hanya saat
+    // berubah: pada sebagian printer ESC ! 0x00 ikut mematikan tebal,
+    // jadi ESC E harus selalu menyusul sesudahnya.
     for (final b in baris) {
       p.rata(b.rata);
       p.besar(b.besar);
@@ -110,10 +96,9 @@ class EscPos {
       p.teks(b.teks);
     }
 
-    // Kembalikan printer ke keadaan normal.
     p.besar(false);
     p.tebal(false);
-    p.rata(0);
+    p.rata(rataKiri);
 
     if (potongKertas) {
       p.potong();

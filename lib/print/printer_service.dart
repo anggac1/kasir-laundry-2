@@ -5,6 +5,7 @@ import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 
 import '../models/models.dart';
 import '../store/settings.dart';
+import '../utils/fmt.dart';
 import 'escpos.dart';
 import 'receipt.dart';
 
@@ -12,7 +13,7 @@ class HasilCetak {
   final bool sukses;
   final String pesan;
 
-  /// Catatan tiap langkah, untuk ditampilkan kalau gagal.
+  // Catatan tiap langkah, ditampilkan kalau gagal.
   final List<String> langkah;
 
   const HasilCetak(this.sukses, this.pesan, [this.langkah = const []]);
@@ -20,8 +21,7 @@ class HasilCetak {
   String get rincian => langkah.join('\n');
 }
 
-/// Ringkasan keadaan Bluetooth, dipakai layar printer untuk
-/// menjelaskan ke pengguna apa yang sedang salah.
+// Keadaan Bluetooth, dipakai layar printer untuk menjelaskan apa yang salah.
 class DiagnosaPrinter {
   final bool bluetoothMenyala;
   final bool izinDiberikan;
@@ -36,7 +36,7 @@ class DiagnosaPrinter {
   });
 }
 
-/// Catatan percetakan terakhir, dipakai layar Debug.
+// Catatan percetakan terakhir, dipakai layar Debug.
 class JejakCetak {
   final String waktu;
   final String kodeNota;
@@ -57,90 +57,80 @@ class JejakCetak {
   });
 }
 
-/// Pembungkus printer thermal Bluetooth Classic (SPP).
-///
-/// Dirancang untuk printer 58mm murah seperti RPP02N, yang punya dua
-/// kebiasaan merepotkan: gampang menolak kiriman data besar sekaligus,
-/// dan kadang melaporkan masih tersambung padahal soketnya sudah mati.
-///
-/// Semua panggilan ke lapisan Android dibatasi waktunya. Tanpa ini,
-/// satu panggilan yang menggantung membuat layar berputar selamanya
-/// karena Future-nya tidak pernah selesai dan tidak melempar error.
+// Printer thermal Bluetooth Classic (SPP), disetel untuk printer 58mm
+// murah seperti RPP02N yang punya dua kebiasaan merepotkan: menolak
+// kiriman besar sekaligus, dan melaporkan masih tersambung padahal
+// soketnya sudah mati.
+//
+// Setiap panggilan ke lapisan Android dibatasi waktunya. Tanpa itu, satu
+// panggilan yang menggantung membuat layar berputar selamanya karena
+// Future-nya tidak pernah selesai dan juga tidak melempar error.
 class PrinterService {
   PrinterService._();
   static final PrinterService instance = PrinterService._();
 
   static const _batas = Duration(seconds: 8);
-
-  /// Dialog izin sistem tidak boleh ditunggu terlalu lama. Sebelumnya
-  /// 60 detik, dan dikali tiga permintaan hasilnya terasa seperti
-  /// aplikasi menggantung.
+  static const _batasSambung = Duration(seconds: 12);
   static const _batasIzin = Duration(seconds: 25);
 
-  /// Potongan kiriman ke printer. Printer SPP murah punya buffer kecil,
-  /// kiriman besar sekaligus sering diterima separuh lalu berhenti.
+  // Printer SPP murah punya buffer kecil; kiriman besar sekaligus sering
+  // diterima separuh lalu berhenti.
   static const _ukuranPotongan = 512;
+
+  // Batas keseluruhan pengiriman, supaya struk panjang di printer yang
+  // lambat tidak menahan layar tanpa ujung.
+  static const _batasTotalKirim = Duration(seconds: 45);
 
   JejakCetak? jejakTerakhir;
 
+  // Bungkus semua panggilan plugin: apa pun yang terjadi, selesai.
   Future<T> _aman<T>(
     Future<T> Function() jalankan,
     T cadangan, {
     Duration batas = _batas,
+    List<String>? catatan,
+    String? label,
   }) async {
     try {
       return await jalankan().timeout(batas);
     } on TimeoutException {
+      if (label != null) catatan?.add('$label: tidak menjawab dalam ${batas.inSeconds} detik');
       return cadangan;
-    } catch (_) {
+    } catch (e) {
+      if (label != null) catatan?.add('$label: gagal ($e)');
       return cadangan;
     }
   }
 
-  // ------------------------------------------------------------------ izin
+  Future<PermissionStatus> _izin(
+    Permission p, {
+    required bool minta,
+  }) =>
+      _aman(
+        () => minta ? p.request() : p.status,
+        PermissionStatus.denied,
+        batas: minta ? _batasIzin : const Duration(seconds: 4),
+      );
 
-  Future<PermissionStatus> _status(Permission p) async {
-    try {
-      return await p.status.timeout(const Duration(seconds: 4));
-    } catch (_) {
-      return PermissionStatus.denied;
-    }
-  }
-
-  Future<PermissionStatus> _minta(Permission p) async {
-    try {
-      return await p.request().timeout(_batasIzin);
-    } catch (_) {
-      return PermissionStatus.denied;
-    }
-  }
-
-  /// Android 12+ memakai BLUETOOTH_CONNECT dan BLUETOOTH_SCAN.
-  /// Android 11 ke bawah memakai izin lokasi.
-  /// Izin yang tidak berlaku di versi Android tertentu langsung ditolak
-  /// sistem, dan itu normal, bukan tanda kegagalan.
-  Future<bool> mintaIzin() async {
-    final connect = await _minta(Permission.bluetoothConnect);
+  // Android 12+ memakai BLUETOOTH_CONNECT dan BLUETOOTH_SCAN, Android 11
+  // ke bawah memakai izin lokasi. Izin yang tidak berlaku di versi
+  // tertentu langsung ditolak sistem, dan itu normal.
+  Future<bool> _periksaIzin({required bool minta}) async {
+    final connect = await _izin(Permission.bluetoothConnect, minta: minta);
     if (connect.isGranted) {
-      await _minta(Permission.bluetoothScan);
+      if (minta) await _izin(Permission.bluetoothScan, minta: true);
       return true;
     }
-    final lokasi = await _minta(Permission.location);
+    final lokasi = await _izin(Permission.location, minta: minta);
     return lokasi.isGranted;
   }
 
-  Future<bool> izinSudahAda() async {
-    final connect = await _status(Permission.bluetoothConnect);
-    if (connect.isGranted) return true;
-    final lokasi = await _status(Permission.location);
-    return lokasi.isGranted;
-  }
+  Future<bool> mintaIzin() => _periksaIzin(minta: true);
 
-  Future<void> bukaPengaturanAplikasi() async {
-    await _aman(() => openAppSettings(), false);
-  }
+  Future<bool> izinSudahAda() => _periksaIzin(minta: false);
 
-  // -------------------------------------------------------------- bluetooth
+  Future<void> bukaPengaturanAplikasi() =>
+      _aman(() => openAppSettings(), false);
 
   Future<bool> bluetoothAktif() =>
       _aman(() => PrintBluetoothThermal.bluetoothEnabled, false);
@@ -148,19 +138,12 @@ class PrinterService {
   Future<List<BluetoothInfo>> daftarPrinter() =>
       _aman(() => PrintBluetoothThermal.pairedBluetooths, <BluetoothInfo>[]);
 
-  Future<bool> terhubung() =>
-      _aman(() => PrintBluetoothThermal.connectionStatus, false);
+  Future<void> putuskan() =>
+      _aman(() => PrintBluetoothThermal.disconnect, false);
 
-  Future<void> putuskan() async {
-    await _aman(() => PrintBluetoothThermal.disconnect, false);
-  }
-
-  /// Sambung ke printer, dicoba beberapa kali.
-  ///
-  /// Sambungan lama selalu diputus lebih dulu. Printer seperti RPP02N
-  /// kadang melaporkan status masih tersambung padahal soketnya sudah
-  /// mati sejak printer dimatikan, dan menulis ke soket mati itu gagal
-  /// tanpa pesan apa pun.
+  // Sambungan lama selalu diputus dulu: RPP02N kadang melaporkan masih
+  // tersambung padahal soketnya sudah mati sejak printer dimatikan, dan
+  // menulis ke soket mati gagal tanpa pesan apa pun.
   Future<bool> hubungkan(String mac, {List<String>? catatan}) async {
     for (var percobaan = 1; percobaan <= 3; percobaan++) {
       await putuskan();
@@ -169,7 +152,9 @@ class PrinterService {
       final ok = await _aman(
         () => PrintBluetoothThermal.connect(macPrinterAddress: mac),
         false,
-        batas: const Duration(seconds: 12),
+        batas: _batasSambung,
+        catatan: catatan,
+        label: 'Sambung percobaan $percobaan',
       );
 
       if (ok) {
@@ -185,27 +170,29 @@ class PrinterService {
     return false;
   }
 
-  /// Kirim byte sedikit demi sedikit.
-  ///
-  /// Printer thermal murah punya buffer beberapa ratus byte saja.
-  /// Struk dua salinan bisa lebih dari 2 KB, dan kalau dikirim sekaligus
-  /// sering tercetak separuh lalu berhenti, atau tidak tercetak sama sekali.
+  // Dikirim sepotong-sepotong karena buffer printer hanya beberapa ratus
+  // byte, sedangkan struk dua salinan bisa lebih dari 2 KB.
   Future<bool> _tulisBertahap(List<int> bytes, {List<String>? catatan}) async {
+    final mulai = DateTime.now();
     var terkirim = 0;
-    for (var i = 0; i < bytes.length; i += _ukuranPotongan) {
-      final akhir = (i + _ukuranPotongan > bytes.length)
-          ? bytes.length
-          : i + _ukuranPotongan;
 
+    for (var i = 0; i < bytes.length; i += _ukuranPotongan) {
+      if (DateTime.now().difference(mulai) > _batasTotalKirim) {
+        catatan?.add('Kirim data: melewati batas waktu di byte ke-$terkirim '
+            'dari ${bytes.length}');
+        return false;
+      }
+
+      final akhir = (i + _ukuranPotongan).clamp(0, bytes.length);
       final ok = await _aman(
         () => PrintBluetoothThermal.writeBytes(bytes.sublist(i, akhir)),
         false,
-        batas: const Duration(seconds: 12),
+        batas: _batasSambung,
       );
 
       if (!ok) {
-        catatan?.add('Kirim data: gagal di byte ke-$terkirim '
-            'dari ${bytes.length}');
+        catatan?.add(
+            'Kirim data: gagal di byte ke-$terkirim dari ${bytes.length}');
         return false;
       }
 
@@ -213,12 +200,13 @@ class PrinterService {
       // Jeda kecil supaya buffer printer sempat kosong.
       await Future.delayed(const Duration(milliseconds: 20));
     }
+
     catatan?.add('Kirim data: berhasil ($terkirim byte)');
     return true;
   }
 
-  /// Kumpulkan keadaan lengkap dalam satu panggilan.
-  /// Dijamin selesai, tidak akan menggantung.
+  // Kumpulkan keadaan dalam satu panggilan. Selalu selesai, walau bisa
+  // memakan waktu bila dialog izin sistem ikut ditunggu.
   Future<DiagnosaPrinter> periksa({bool mintaIzinDulu = false}) async {
     var izin = await izinSudahAda();
     if (!izin && mintaIzinDulu) izin = await mintaIzin();
@@ -226,7 +214,7 @@ class PrinterService {
     final menyala = await bluetoothAktif();
     final perangkat = izin ? await daftarPrinter() : <BluetoothInfo>[];
 
-    String catatan;
+    final String catatan;
     if (!izin) {
       catatan = 'Izin Bluetooth belum diberikan.';
     } else if (!menyala) {
@@ -245,10 +233,7 @@ class PrinterService {
     );
   }
 
-  // ----------------------------------------------------------------- cetak
-
-  /// Mengirim ke printer sambil mencatat tiap langkah, supaya kalau
-  /// gagal bisa terlihat persis berhenti di tahap mana.
+  // Tiap langkah dicatat supaya kalau gagal terlihat berhenti di tahap mana.
   Future<HasilCetak> kirim(List<int> bytes) async {
     final s = Settings.instance;
     final catatan = <String>[];
@@ -260,8 +245,7 @@ class PrinterService {
 
     if (mac == null || mac.isEmpty) {
       return HasilCetak(false,
-          'Printer belum dipilih. Buka Pengaturan lalu Pilih printer.',
-          catatan);
+          'Printer belum dipilih. Buka Pengaturan lalu Pilih printer.', catatan);
     }
 
     var izin = await izinSudahAda();
@@ -273,7 +257,8 @@ class PrinterService {
     if (!izin) {
       return HasilCetak(
           false,
-          'Izin Bluetooth ditolak. Buka pengaturan aplikasi untuk mengizinkannya.',
+          'Izin Bluetooth ditolak. Buka pengaturan aplikasi untuk '
+          'mengizinkannya.',
           catatan);
     }
 
@@ -302,21 +287,45 @@ class PrinterService {
     return HasilCetak(true, 'Struk terkirim ke printer.', catatan);
   }
 
-  /// Susun byte untuk satu nota, sebanyak jumlah salinan yang diatur.
+  // Urutan: paksaan langsung, lalu setelan nota ini, baru bawaan.
+  int jumlahSalinan(Nota nota, [int? paksa]) =>
+      paksa ?? nota.jumlahCetak ?? Settings.instance.jumlahSalinan;
+
+  // Semua salinan sebagai baris siap cetak, dengan pemisah antar lembar.
+  // Satu-satunya tempat salinan dirangkai; bytes dan teks ikut dari sini.
+  List<BarisStruk> susunBaris(Nota nota, {int? paksaSalinan}) {
+    final s = Settings.instance;
+    final cfg = StrukConfig.dari(s);
+    final jumlah = jumlahSalinan(nota, paksaSalinan);
+
+    final semua = <BarisStruk>[];
+    for (var i = 0; i < jumlah; i++) {
+      if (i > 0) {
+        semua
+          ..add(const BarisStruk(''))
+          ..add(BarisStruk('=' * cfg.lebarKertas))
+          ..add(const BarisStruk(''));
+      }
+      semua.addAll(Struk.render(nota, cfg,
+          salinan: s.labelSalinanKe(i), salinanKe: i + 1));
+    }
+    return semua;
+  }
+
+  String susunTeks(Nota nota, {int? paksaSalinan}) => Struk.pratinjau(
+        susunBaris(nota, paksaSalinan: paksaSalinan),
+        Settings.instance.lebarKertas,
+      );
+
   List<int> susunBytes(Nota nota, {int? paksaSalinan}) {
     final s = Settings.instance;
     final cfg = StrukConfig.dari(s);
-    // Urutan: paksaan langsung, lalu setelan nota ini, baru bawaan.
-    final jumlah = paksaSalinan ?? nota.jumlahCetak ?? s.jumlahSalinan;
+    final jumlah = jumlahSalinan(nota, paksaSalinan);
 
     final semua = <int>[];
     for (var i = 0; i < jumlah; i++) {
-      final baris = Struk.render(
-        nota,
-        cfg,
-        salinan: s.labelSalinanKe(i),
-        salinanKe: i + 1,
-      );
+      final baris = Struk.render(nota, cfg,
+          salinan: s.labelSalinanKe(i), salinanKe: i + 1);
       semua.addAll(EscPos.dariBaris(
         baris,
         barisKosongAkhir: s.barisKosongAkhir,
@@ -327,62 +336,13 @@ class PrinterService {
     return semua;
   }
 
-  /// Seluruh salinan sebagai daftar baris siap cetak, dengan garis
-  /// pemisah antar lembar. Dipakai layar pratinjau supaya gaya tiap
-  /// baris (tebal, besar, perataan) ikut terlihat.
-  List<BarisStruk> susunBaris(Nota nota, {int? paksaSalinan}) {
-    final s = Settings.instance;
-    final cfg = StrukConfig.dari(s);
-    final jumlah = paksaSalinan ?? nota.jumlahCetak ?? s.jumlahSalinan;
-
-    final semua = <BarisStruk>[];
-    for (var i = 0; i < jumlah; i++) {
-      if (i > 0) {
-        semua.add(const BarisStruk(''));
-        semua.add(BarisStruk('=' * cfg.lebarKertas));
-        semua.add(const BarisStruk(''));
-      }
-      semua.addAll(Struk.render(
-        nota,
-        cfg,
-        salinan: s.labelSalinanKe(i),
-        salinanKe: i + 1,
-      ));
-    }
-    return semua;
-  }
-
-  /// Versi teks dari seluruh salinan, untuk pratinjau dan layar debug.
-  String susunTeks(Nota nota, {int? paksaSalinan}) {
-    final s = Settings.instance;
-    final cfg = StrukConfig.dari(s);
-    final jumlah = paksaSalinan ?? nota.jumlahCetak ?? s.jumlahSalinan;
-
-    final buf = StringBuffer();
-    for (var i = 0; i < jumlah; i++) {
-      if (i > 0) buf.writeln('\n${'=' * cfg.lebarKertas}\n');
-      final baris = Struk.render(
-        nota,
-        cfg,
-        salinan: s.labelSalinanKe(i),
-        salinanKe: i + 1,
-      );
-      buf.write(Struk.pratinjau(baris, cfg.lebarKertas));
-    }
-    return buf.toString();
-  }
-
   Future<HasilCetak> cetakNota(Nota nota, {int? paksaSalinan}) async {
-    final s = Settings.instance;
-    final jumlah = paksaSalinan ?? nota.jumlahCetak ?? s.jumlahSalinan;
+    final jumlah = jumlahSalinan(nota, paksaSalinan);
     final bytes = susunBytes(nota, paksaSalinan: jumlah);
     final hasil = await kirim(bytes);
 
-    final now = DateTime.now();
     jejakTerakhir = JejakCetak(
-      waktu: '${now.hour.toString().padLeft(2, '0')}:'
-          '${now.minute.toString().padLeft(2, '0')}:'
-          '${now.second.toString().padLeft(2, '0')}',
+      waktu: jamDetik(DateTime.now()),
       kodeNota: nota.kode,
       jumlahSalinan: jumlah,
       teksStruk: susunTeks(nota, paksaSalinan: jumlah),
@@ -390,7 +350,6 @@ class PrinterService {
       hasil: hasil.pesan,
       langkah: hasil.langkah,
     );
-
     return hasil;
   }
 }

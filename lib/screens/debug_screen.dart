@@ -6,9 +6,10 @@ import '../debug/kode_sumber.dart';
 import '../models/models.dart';
 import '../print/printer_service.dart';
 import '../store/settings.dart';
+import '../ui/umum.dart';
 import '../utils/fmt.dart';
 
-/// Layar untuk menelusuri bug langsung dari HP, tanpa membuka laptop.
+// Layar untuk menelusuri bug langsung dari HP, tanpa membuka laptop.
 class DebugScreen extends StatelessWidget {
   const DebugScreen({super.key});
 
@@ -40,8 +41,6 @@ class DebugScreen extends StatelessWidget {
   }
 }
 
-// ============================================================ uji hitung
-
 class _TabUjiHitung extends StatefulWidget {
   const _TabUjiHitung();
 
@@ -63,8 +62,8 @@ class _TabUjiHitungState extends State<_TabUjiHitung> {
     super.dispose();
   }
 
-  /// Hitung ulang total seluruh nota dari itemnya, bandingkan dengan
-  /// nilai yang tersimpan. Kalau ada selisih, berarti ada bug nyata.
+  // Hitung ulang total seluruh nota dari itemnya, bandingkan dengan nilai
+  // yang tersimpan. Kalau ada selisih, berarti ada bug nyata.
   Future<void> _audit() async {
     setState(() {
       _mengaudit = true;
@@ -76,7 +75,9 @@ class _TabUjiHitungState extends State<_TabUjiHitung> {
     var diperiksa = 0;
 
     for (final ringkas in daftar) {
-      final n = await DB.instance.notaAmbil(ringkas.id!);
+      final id = ringkas.id;
+      if (id == null) continue;
+      final n = await DB.instance.notaAmbil(id);
       if (n == null) continue;
       diperiksa++;
       final ulang = n.hitungTotal();
@@ -145,7 +146,7 @@ class _TabUjiHitungState extends State<_TabUjiHitung> {
           ],
         ),
         const SizedBox(height: 16),
-        _kotakKode('''qty      = $qty
+        KotakKode('''qty      = $qty
 harga    = $harga
 qty * harga        = $mentah
 .round()           = $subtotal
@@ -178,15 +179,13 @@ qtyStr(qty)        = ${qtyStr(qty)}'''),
         ),
         if (_hasilAudit != null) ...[
           const SizedBox(height: 12),
-          _kotakKode(_hasilAudit!),
+          KotakKode(_hasilAudit!),
         ],
         const SizedBox(height: 40),
       ],
     );
   }
 }
-
-// ================================================================== kode
 
 class _TabKode extends StatelessWidget {
   const _TabKode();
@@ -224,7 +223,7 @@ class _TabKode extends StatelessWidget {
                       style: const TextStyle(fontSize: 12)),
                 ),
                 const SizedBox(height: 10),
-                _kotakKode(p.kode),
+                KotakKode(p.kode),
                 const SizedBox(height: 6),
                 Align(
                   alignment: Alignment.centerRight,
@@ -249,8 +248,6 @@ class _TabKode extends StatelessWidget {
   }
 }
 
-// ========================================================== struk mentah
-
 class _TabStrukMentah extends StatefulWidget {
   const _TabStrukMentah();
 
@@ -270,9 +267,9 @@ class _TabStrukMentahState extends State<_TabStrukMentah> {
 
   Future<void> _muat() async {
     final daftar = await DB.instance.notaDaftar(limit: 1);
-    Nota? n;
-    if (daftar.isNotEmpty) n = await DB.instance.notaAmbil(daftar.first.id!);
-    n ??= notaContoh();
+    final id = daftar.isEmpty ? null : daftar.first.id;
+    final n = (id == null ? null : await DB.instance.notaAmbil(id)) ??
+        notaContoh();
     if (!mounted) return;
     setState(() {
       _nota = n;
@@ -280,28 +277,13 @@ class _TabStrukMentahState extends State<_TabStrukMentah> {
     });
   }
 
-  String _hex(List<int> bytes) {
-    final buf = StringBuffer();
-    for (var i = 0; i < bytes.length; i += 16) {
-      final akhir = (i + 16 > bytes.length) ? bytes.length : i + 16;
-      final potong = bytes.sublist(i, akhir);
-      final hex = potong
-          .map((b) => b.toRadixString(16).padLeft(2, '0').toUpperCase())
-          .join(' ');
-      final teks = potong
-          .map((b) => (b >= 32 && b < 127) ? String.fromCharCode(b) : '.')
-          .join();
-      buf.writeln('${i.toRadixString(16).padLeft(4, '0')}  '
-          '${hex.padRight(47)}  $teks');
-    }
-    return buf.toString();
-  }
-
   @override
   Widget build(BuildContext context) {
-    if (_memuat) return const Center(child: CircularProgressIndicator());
+    final n = _nota;
+    if (_memuat || n == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
-    final n = _nota!;
     final s = Settings.instance;
     final svc = PrinterService.instance;
     final teks = svc.susunTeks(n);
@@ -329,7 +311,7 @@ class _TabStrukMentahState extends State<_TabStrukMentah> {
         const Text('Hasil render template',
             style: TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
-        _kotakKode(teks),
+        KotakKode(teks),
 
         const SizedBox(height: 20),
         Row(
@@ -340,7 +322,7 @@ class _TabStrukMentahState extends State<_TabStrukMentah> {
             ),
             TextButton.icon(
               onPressed: () {
-                Clipboard.setData(ClipboardData(text: _hex(bytes)));
+                Clipboard.setData(ClipboardData(text: hex(bytes)));
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Hex dump disalin.')),
                 );
@@ -356,16 +338,13 @@ class _TabStrukMentahState extends State<_TabStrukMentah> {
           style: TextStyle(fontSize: 11, color: Colors.grey),
         ),
         const SizedBox(height: 8),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: _kotakKode(_hex(bytes), kecil: true),
-        ),
+        KotakKode(hex(bytes)),
 
         const SizedBox(height: 20),
         const Text('Percetakan terakhir',
             style: TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
-        _kotakKode(jejak == null
+        KotakKode(jejak == null
             ? 'Belum ada percetakan sejak aplikasi dibuka.'
             : 'Waktu   : ${jejak.waktu}\n'
                 'Nota    : ${jejak.kodeNota}\n'
@@ -378,26 +357,4 @@ class _TabStrukMentahState extends State<_TabStrukMentah> {
       ],
     );
   }
-}
-
-// ============================================================== bersama
-
-Widget _kotakKode(String teks, {bool kecil = false}) {
-  return Container(
-    width: double.infinity,
-    padding: const EdgeInsets.all(10),
-    decoration: BoxDecoration(
-      color: const Color(0xFF1E1E1E),
-      borderRadius: BorderRadius.circular(8),
-    ),
-    child: SelectableText(
-      teks,
-      style: TextStyle(
-        fontFamily: 'monospace',
-        fontSize: kecil ? 9 : 11,
-        height: 1.4,
-        color: const Color(0xFFD4D4D4),
-      ),
-    ),
-  );
 }

@@ -13,15 +13,12 @@ import '../utils/fmt.dart';
 class HasilEkspor {
   final bool sukses;
   final String pesan;
-  final String? path;
-  const HasilEkspor(this.sukses, this.pesan, [this.path]);
+  const HasilEkspor(this.sukses, this.pesan);
 }
 
-/// Membuat laporan transaksi dalam bentuk PDF dan Excel.
-///
-/// Berkas ditulis ke folder dokumen milik aplikasi sendiri, jadi tidak
-/// butuh izin penyimpanan apa pun. Setelah itu dibuka lewat menu berbagi
-/// supaya Anda bisa simpan sendiri ke mana saja atau kirim lewat WhatsApp.
+// Membuat laporan transaksi dalam bentuk PDF dan Excel. Berkas ditulis ke
+// folder dokumen milik aplikasi sendiri, jadi tidak butuh izin penyimpanan
+// apa pun, lalu dibuka lewat menu berbagi bawaan HP.
 class Ekspor {
   Ekspor._();
   static final Ekspor instance = Ekspor._();
@@ -32,10 +29,11 @@ class Ekspor {
       '${d.hour.toString().padLeft(2, '0')}'
       '${d.minute.toString().padLeft(2, '0')}';
 
-  int _totalDari(List<Nota> daftar) =>
+  // Publik supaya layar ekspor memakai angka yang sama persis dengan berkas.
+  static int totalDari(List<Nota> daftar) =>
       daftar.fold<int>(0, (a, n) => a + n.total);
 
-  int _totalBelumBayar(List<Nota> daftar) => daftar
+  static int totalBelumBayar(List<Nota> daftar) => daftar
       .where((n) => n.statusBayar == StatusBayar.belum)
       .fold<int>(0, (a, n) => a + n.total);
 
@@ -51,13 +49,11 @@ class Ekspor {
       await file.writeAsBytes(bytes, flush: true);
 
       await Share.shareXFiles([XFile(path)], text: judulBagikan);
-      return HasilEkspor(true, 'Berkas dibuat: $namaBerkas', path);
+      return HasilEkspor(true, 'Berkas dibuat: $namaBerkas');
     } catch (e) {
       return HasilEkspor(false, 'Gagal membuat berkas: $e');
     }
   }
-
-  // ------------------------------------------------------------------- PDF
 
   Future<HasilEkspor> laporanPdf({
     required List<Nota> daftar,
@@ -99,11 +95,9 @@ class Ekspor {
                 style: pw.TextStyle(
                     fontSize: 13, fontWeight: pw.FontWeight.bold)),
             pw.Text(keterangan, style: const pw.TextStyle(fontSize: 10)),
-            pw.Text('Dibuat ${tanggalJam(sekarang)}',
+            pw.Text('Dibuat ${tanggal(sekarang)} ${jam(sekarang)}',
                 style: const pw.TextStyle(fontSize: 9)),
             pw.SizedBox(height: 14),
-
-            // Ringkasan
             pw.Container(
               padding: const pw.EdgeInsets.all(10),
               decoration: pw.BoxDecoration(
@@ -114,8 +108,8 @@ class Ekspor {
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
                   _ringkas('Jumlah nota', '${daftar.length}'),
-                  _ringkas('Total nilai', rupiah(_totalDari(daftar))),
-                  _ringkas('Belum dibayar', rupiah(_totalBelumBayar(daftar))),
+                  _ringkas('Total nilai', rupiah(totalDari(daftar))),
+                  _ringkas('Belum dibayar', rupiah(totalBelumBayar(daftar))),
                 ],
               ),
             ),
@@ -152,7 +146,7 @@ class Ekspor {
               data: daftar
                   .map((n) => [
                         n.kode,
-                        tanggalJam(n.dibuat),
+                        '${tanggal(n.dibuat)} ${jam(n.dibuat)}',
                         n.pelanggan,
                         '${n.items.length}',
                         StatusPesanan.label(n.status),
@@ -164,7 +158,7 @@ class Ekspor {
             pw.SizedBox(height: 10),
             pw.Align(
               alignment: pw.Alignment.centerRight,
-              child: pw.Text('TOTAL: ${rupiah(_totalDari(daftar))}',
+              child: pw.Text('TOTAL: ${rupiah(totalDari(daftar))}',
                   style: pw.TextStyle(
                       fontSize: 12, fontWeight: pw.FontWeight.bold)),
             ),
@@ -193,7 +187,21 @@ class Ekspor {
         ],
       );
 
-  // ----------------------------------------------------------------- Excel
+  // Satu baris ke sembarang lembar, tipe sel mengikuti tipe nilainya.
+  static void _tulisBaris(xls.Sheet lembar, int baris, List<Object?> isi) {
+    for (var k = 0; k < isi.length; k++) {
+      final sel = lembar.cell(
+          xls.CellIndex.indexByColumnRow(columnIndex: k, rowIndex: baris));
+      final v = isi[k];
+      if (v is int) {
+        sel.value = xls.IntCellValue(v);
+      } else if (v is double) {
+        sel.value = xls.DoubleCellValue(v);
+      } else {
+        sel.value = xls.TextCellValue(v?.toString() ?? '');
+      }
+    }
+  }
 
   Future<HasilEkspor> laporanExcel({
     required List<Nota> daftar,
@@ -204,28 +212,16 @@ class Ekspor {
       final sekarang = DateTime.now();
       final buku = xls.Excel.createExcel();
 
-      // ---------- Lembar 1: ringkasan per nota ----------
+      // Lembar 1: ringkasan per nota.
       final lembar = buku['Nota'];
       buku.setDefaultSheet('Nota');
 
-      void tulis(int baris, List<Object?> isi) {
-        for (var k = 0; k < isi.length; k++) {
-          final sel = lembar.cell(xls.CellIndex.indexByColumnRow(
-              columnIndex: k, rowIndex: baris));
-          final v = isi[k];
-          if (v is int) {
-            sel.value = xls.IntCellValue(v);
-          } else if (v is double) {
-            sel.value = xls.DoubleCellValue(v);
-          } else {
-            sel.value = xls.TextCellValue(v?.toString() ?? '');
-          }
-        }
-      }
+      void tulis(int baris, List<Object?> isi) =>
+          _tulisBaris(lembar, baris, isi);
 
       tulis(0, [s.namaToko]);
       tulis(1, ['Laporan transaksi', keterangan]);
-      tulis(2, ['Dibuat', tanggalJam(sekarang)]);
+      tulis(2, ['Dibuat', '${tanggal(sekarang)} ${jam(sekarang)}']);
 
       tulis(4, [
         'No Nota',
@@ -260,26 +256,13 @@ class Ekspor {
 
       baris++;
       tulis(baris++, ['', '', '', '', '', '', '', '', 'TOTAL',
-        _totalDari(daftar)]);
+        totalDari(daftar)]);
       tulis(baris++, ['', '', '', '', '', '', '', '', 'BELUM DIBAYAR',
-        _totalBelumBayar(daftar)]);
+        totalBelumBayar(daftar)]);
 
-      // ---------- Lembar 2: rincian item ----------
+      // Lembar 2: rincian item.
       final lembar2 = buku['Rincian Item'];
-      void tulis2(int b, List<Object?> isi) {
-        for (var k = 0; k < isi.length; k++) {
-          final sel = lembar2.cell(
-              xls.CellIndex.indexByColumnRow(columnIndex: k, rowIndex: b));
-          final v = isi[k];
-          if (v is int) {
-            sel.value = xls.IntCellValue(v);
-          } else if (v is double) {
-            sel.value = xls.DoubleCellValue(v);
-          } else {
-            sel.value = xls.TextCellValue(v?.toString() ?? '');
-          }
-        }
-      }
+      void tulis2(int b, List<Object?> isi) => _tulisBaris(lembar2, b, isi);
 
       tulis2(0, [
         'No Nota',

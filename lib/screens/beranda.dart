@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../db/db.dart';
@@ -18,12 +20,13 @@ class BerandaScreen extends StatefulWidget {
 
 class _BerandaScreenState extends State<BerandaScreen> {
   final _cariCtrl = TextEditingController();
+  Timer? _jedaCari;
 
   List<Nota> _notas = [];
   Map<String, int> _ringkasan = {};
   bool _memuat = true;
 
-  /// null = semua status, -1 = khusus "belum lunas"
+  // null = semua status, -1 = khusus "belum lunas"
   int? _filter;
 
   @override
@@ -34,11 +37,21 @@ class _BerandaScreenState extends State<BerandaScreen> {
 
   @override
   void dispose() {
+    _jedaCari?.cancel();
     _cariCtrl.dispose();
     super.dispose();
   }
 
+  // Query ditunda agar mengetik cepat tidak menembak DB tiap huruf, tapi
+  // setState langsung dipanggil supaya tombol hapus teks tidak telat muncul.
+  void _cariBerubah() {
+    setState(() {});
+    _jedaCari?.cancel();
+    _jedaCari = Timer(const Duration(milliseconds: 300), _muat);
+  }
+
   Future<void> _muat() async {
+    if (!mounted) return;
     setState(() => _memuat = true);
     final belumLunas = _filter == -1;
     final data = await DB.instance.notaDaftar(
@@ -62,7 +75,6 @@ class _BerandaScreenState extends State<BerandaScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Kasir Laundry'),
@@ -119,7 +131,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
         onRefresh: _muat,
         child: Column(
           children: [
-            _kartuRingkasan(cs),
+            _kartuRingkasan(),
             _barisFilter(),
             const Divider(height: 1),
             Expanded(
@@ -141,7 +153,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
     );
   }
 
-  Widget _kartuRingkasan(ColorScheme cs) {
+  Widget _kartuRingkasan() {
     Widget kotak(String judul, String nilai, IconData ikon, Color warna) {
       return Expanded(
         child: Container(
@@ -174,8 +186,6 @@ class _BerandaScreenState extends State<BerandaScreen> {
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
       child: Row(
         children: [
-          // Omzet diganti nilai hutang, karena yang perlu ditagih jauh
-          // lebih mendesak daripada berapa yang sudah masuk hari ini.
           kotak('Belum dibayar', rupiah(_ringkasan['belumLunasNilai'] ?? 0),
               Icons.account_balance_wallet_outlined, Colors.red.shade700),
           const SizedBox(width: 8),
@@ -211,7 +221,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
           child: TextField(
             controller: _cariCtrl,
-            onChanged: (_) => _muat(),
+            onChanged: (_) => _cariBerubah(),
             decoration: InputDecoration(
               hintText: 'Cari nama pelanggan atau nomor nota',
               prefixIcon: const Icon(Icons.search),
@@ -220,6 +230,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
                   : IconButton(
                       icon: const Icon(Icons.close),
                       onPressed: () {
+                        _jedaCari?.cancel();
                         _cariCtrl.clear();
                         _muat();
                       },
@@ -264,11 +275,12 @@ class _BerandaScreenState extends State<BerandaScreen> {
   }
 
   Widget _baris(Nota n) {
+    final id = n.id;
     return ListTile(
-      onTap: () => _buka(NotaDetailScreen(notaId: n.id!)),
+      onTap: id == null ? null : () => _buka(NotaDetailScreen(notaId: id)),
       title: Text(n.pelanggan,
           style: const TextStyle(fontWeight: FontWeight.w600)),
-      subtitle: Text('${n.kode}  -  ${tanggalJam(n.dibuat)}'),
+      subtitle: Text('${n.kode}  -  ${tanggal(n.dibuat)} ${jam(n.dibuat)}'),
       trailing: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.end,
@@ -297,7 +309,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
   }
 }
 
-/// Lencana kecil untuk status pesanan.
+// Lencana kecil untuk status pesanan.
 class LencanaStatus extends StatelessWidget {
   final int status;
   const LencanaStatus({super.key, required this.status});
@@ -318,7 +330,7 @@ class LencanaStatus extends StatelessWidget {
   }
 }
 
-/// Lencana kecil untuk status pembayaran.
+// Lencana kecil untuk status pembayaran.
 class LencanaBayar extends StatelessWidget {
   final int statusBayar;
   const LencanaBayar({super.key, required this.statusBayar});

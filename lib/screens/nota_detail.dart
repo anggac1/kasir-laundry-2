@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import '../db/db.dart';
 import '../models/models.dart';
 import '../print/printer_service.dart';
-import '../print/receipt.dart';
 import '../store/settings.dart';
+import '../ui/umum.dart';
 import '../utils/fmt.dart';
 import 'beranda.dart' show LencanaBayar, LencanaStatus;
 import 'nota_baru.dart';
@@ -12,6 +12,7 @@ import 'pratinjau.dart';
 
 class NotaDetailScreen extends StatefulWidget {
   final int notaId;
+
   const NotaDetailScreen({super.key, required this.notaId});
 
   @override
@@ -37,109 +38,66 @@ class _NotaDetailScreenState extends State<NotaDetailScreen> {
     });
   }
 
-  void _pesan(String s) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s)));
-  }
 
   Future<void> _ubahStatus(int status) async {
     await DB.instance.notaUbahStatus(widget.notaId, status);
     await _muat();
   }
 
-  /// Membenarkan baris pembayaran satu nota saja, tanpa mengubah
-  /// apa pun yang lain. Dipakai saat pelanggan melunasi ketika
-  /// mengambil cucian.
+  // Membenarkan baris pembayaran satu nota saja, tanpa mengubah apa pun yang
+  // lain. Dipakai saat pelanggan melunasi ketika mengambil cucian.
   Future<void> _ubahBayar(int statusBayar) async {
     await DB.instance.notaUbahBayar(widget.notaId, statusBayar);
     await _muat();
-    _pesan('Pembayaran diubah jadi ${StatusBayar.label(statusBayar)}.');
+    if (!mounted) return;
+    pesan(context, 'Pembayaran diubah jadi ${StatusBayar.label(statusBayar)}.');
   }
 
   Future<void> _ubahUang() async {
     final n = _nota;
     if (n == null) return;
-    final ctrl = TextEditingController(
-        text: n.uangDibayar == null ? '' : n.uangDibayar.toString());
-
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Uang Diterima'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          keyboardType: TextInputType.number,
-          decoration: InputDecoration(
-            prefixText: 'Rp ',
-            helperText: 'Kosongkan bila tidak ingin dicatat. '
-                'Total ${rupiah(n.total)}',
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Batal')),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Simpan')),
-        ],
-      ),
+    final teks = await dialogIsian(
+      context,
+      judul: 'Uang Diterima',
+      awal: n.uangDibayar?.toString() ?? '',
+      bantuan: 'Kosongkan bila tidak ingin dicatat. Total ${rupiah(n.total)}',
+      tipe: TextInputType.number,
     );
-    if (ok != true) return;
-    await DB.instance
-        .notaUbahUang(widget.notaId, int.tryParse(ctrl.text.trim()));
+    if (teks == null) return;
+    await DB.instance.notaUbahUang(widget.notaId, int.tryParse(teks.trim()));
     await _muat();
   }
 
   Future<void> _ubahJumlahCetak() async {
     final n = _nota;
     if (n == null) return;
-    final ctrl = TextEditingController(
-        text: n.jumlahCetak == null ? '' : n.jumlahCetak.toString());
-
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Jumlah Lembar'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          keyboardType: TextInputType.number,
-          decoration: InputDecoration(
-            labelText: 'Lembar',
-            helperText: 'Kosongkan untuk ikut bawaan '
-                '(${Settings.instance.jumlahSalinan} lembar)',
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Batal')),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Simpan')),
-        ],
-      ),
+    final teks = await dialogIsian(
+      context,
+      judul: 'Jumlah Lembar',
+      awal: n.jumlahCetak?.toString() ?? '',
+      label: 'Lembar',
+      bantuan: 'Kosongkan untuk ikut bawaan '
+          '(${Settings.instance.jumlahSalinan} lembar)',
+      tipe: TextInputType.number,
     );
-    if (ok != true) return;
-    final v = int.tryParse(ctrl.text.trim());
-    await DB.instance.notaUbahJumlahCetak(
-        widget.notaId, (v == null || v < 1) ? null : v);
+    if (teks == null) return;
+    final v = int.tryParse(teks.trim());
+    await DB.instance
+        .notaUbahJumlahCetak(widget.notaId, (v == null || v < 1) ? null : v);
     await _muat();
   }
 
-  /// Selalu tampilkan pratinjau lebih dulu, supaya salah input
-  /// ketahuan sebelum kertas terpakai.
+  // Selalu tampilkan pratinjau lebih dulu, supaya salah input ketahuan
+  // sebelum kertas terpakai.
   Future<void> _cetak() async {
     final n = _nota;
     if (n == null) return;
     final lanjut = await tampilkanPratinjau(context, n);
     if (!lanjut || !mounted) return;
-    _pesan('Menghubungkan ke printer...');
+    pesan(context, 'Menghubungkan ke printer...');
     final hasil = await PrinterService.instance.cetakNota(n);
     if (!mounted) return;
-    _pesan(hasil.pesan);
+    pesan(context, hasil.pesan, galat: !hasil.sukses);
   }
 
   Future<void> _pratinjau() async {
@@ -149,24 +107,12 @@ class _NotaDetailScreenState extends State<NotaDetailScreen> {
   }
 
   Future<void> _hapus() async {
-    final ya = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Hapus nota ini?'),
-        content: const Text('Data yang dihapus tidak bisa dikembalikan.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Batal')),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Hapus'),
-          ),
-        ],
-      ),
+    final ya = await konfirmasiHapus(
+      context,
+      judul: 'Hapus nota ini?',
+      isi: 'Data yang dihapus tidak bisa dikembalikan.',
     );
-    if (ya != true) return;
+    if (!ya) return;
     await DB.instance.notaHapus(widget.notaId);
     if (mounted) Navigator.pop(context);
   }
@@ -271,13 +217,14 @@ class _NotaDetailScreenState extends State<NotaDetailScreen> {
                       selected: {n.statusBayar},
                       onSelectionChanged: (v) => _ubahBayar(v.first),
                     ),
-                    if (n.lunas && n.dibayarMs != null)
+                    if (n.statusBayar == StatusBayar.lunas &&
+                        n.dibayarMs != null)
                       Padding(
                         padding: const EdgeInsets.only(top: 6),
                         child: Text(
                           'Dibayar ${tanggalJam(DateTime.fromMillisecondsSinceEpoch(n.dibayarMs!))}',
-                          style: const TextStyle(
-                              fontSize: 12, color: Colors.grey),
+                          style:
+                              const TextStyle(fontSize: 12, color: Colors.grey),
                         ),
                       ),
                     ListTile(
@@ -318,7 +265,8 @@ class _NotaDetailScreenState extends State<NotaDetailScreen> {
                                 children: [
                                   Text(it.nama),
                                   Text(
-                                    '${qtyStr(it.qty)} ${it.satuan} x ${rupiah(it.harga)}',
+                                    '${Satuan.gabung(qtyStr(it.qty), it.satuan)}'
+                                    ' x ${rupiah(it.harga)}',
                                     style: const TextStyle(
                                         fontSize: 12, color: Colors.grey),
                                   ),
@@ -334,8 +282,8 @@ class _NotaDetailScreenState extends State<NotaDetailScreen> {
                     Row(
                       children: [
                         Text(n.labelTotal,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold)),
+                            style:
+                                const TextStyle(fontWeight: FontWeight.bold)),
                         const Spacer(),
                         Text(rupiah(n.nilaiTampil),
                             style: TextStyle(

@@ -4,13 +4,17 @@ import '../db/db.dart';
 import '../models/models.dart';
 import '../print/printer_service.dart';
 import '../store/settings.dart';
+import '../ui/umum.dart';
 import '../utils/fmt.dart';
+import 'dialog_item.dart';
 import 'nota_detail.dart';
+import 'pilih_layanan_sheet.dart';
 import 'pratinjau.dart';
 
 class NotaBaruScreen extends StatefulWidget {
   /// Bila diisi, layar ini berfungsi sebagai EDIT nota.
   final Nota? notaAwal;
+
   const NotaBaruScreen({super.key, this.notaAwal});
 
   @override
@@ -20,25 +24,25 @@ class NotaBaruScreen extends StatefulWidget {
 class _NotaBaruScreenState extends State<NotaBaruScreen> {
   final _namaCtrl = TextEditingController();
   final _catatanCtrl = TextEditingController();
-
-  final List<ItemNota> _items = [];
   final _uangCtrl = TextEditingController();
   final _cetakCtrl = TextEditingController();
+
+  final List<ItemNota> _items = [];
   DateTime? _estimasi;
 
-  /// true  = nota dibuat di AWAL, perlu estimasi tanggal selesai.
-  /// false = nota dibuat di AKHIR saat cucian sudah selesai, estimasi
-  ///         tidak ada gunanya dan tidak ikut dicetak.
+  // true  = nota dibuat di awal, perlu estimasi tanggal selesai.
+  // false = nota dibuat di akhir saat cucian sudah selesai, estimasi tidak
+  //         ada gunanya dan tidak ikut dicetak.
   bool _pakaiEstimasi = true;
 
   int _statusBayar = StatusBayar.belum;
   bool _menyimpan = false;
 
-  /// Kolom isian buatan pengguna. Kunci = kunci placeholder.
+  // Kolom isian buatan pengguna. Kunci = kunci placeholder.
   final Map<String, TextEditingController> _ekstraCtrl = {};
   late List<String> _labelEkstra;
 
-  bool get _mode_edit => widget.notaAwal != null;
+  bool get _modeEdit => widget.notaAwal != null;
 
   @override
   void initState() {
@@ -80,11 +84,13 @@ class _NotaBaruScreenState extends State<NotaBaruScreen> {
     super.dispose();
   }
 
-  int get _total => _items.fold<int>(0, (s, e) => s + e.subtotal);
+  // Pakai aturan penjumlahan yang sama dengan struk dan database.
+  int get _total => (Nota(kode: '', pelanggan: '', dibuatMs: 0, items: _items))
+      .hitungTotal();
 
-  /// Kembalian hanya dihitung kalau kolom uang benar-benar diisi.
-  String get _uangKembalianInfo {
-    final uang = int.tryParse(_uangCtrl.text.trim());
+  // Kembalian hanya dihitung kalau kolom uang benar-benar diisi.
+  String _uangKembalianInfo(String teks) {
+    final uang = int.tryParse(teks.trim());
     if (uang == null) {
       return 'Boleh dikosongkan, baris ini tidak akan tercetak';
     }
@@ -93,225 +99,36 @@ class _NotaBaruScreenState extends State<NotaBaruScreen> {
     return 'Kembalian ${rupiah(kembali)}';
   }
 
-  Future<void> _pilihLayanan() async {
-    final layanan = await DB.instance.layananSemua(hanyaAktif: true);
-    if (!mounted) return;
-    if (layanan.isEmpty) {
-      _pesan('Belum ada layanan. Tambahkan dulu di menu Daftar Layanan.');
-      return;
-    }
-    final dipilih = await showModalBottomSheet<Layanan>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => _PilihLayananSheet(layanan: layanan),
-    );
-    if (dipilih == null || !mounted) return;
-    await _isiQty(dipilih);
-  }
-
-  Future<void> _isiQty(Layanan l, {ItemNota? edit}) async {
-    final ctrl = TextEditingController(
-        text: edit != null ? qtyStr(edit.qty) : (l.satuan == Satuan.kg ? '' : '1'));
-    final hargaCtrl =
-        TextEditingController(text: (edit?.harga ?? l.harga).toString());
-
-    final hasil = await showDialog<ItemNota>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l.nama),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: ctrl,
-              autofocus: true,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: InputDecoration(
-                labelText: l.satuan == Satuan.kg ? 'Berat (kg)' : 'Jumlah (pcs)',
-                helperText: l.satuan == Satuan.kg
-                    ? 'Boleh desimal, contoh 3.5'
-                    : 'Angka bulat',
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: hargaCtrl,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: 'Harga per ${l.satuan}',
-                helperText: 'Bisa diubah khusus nota ini',
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
-          FilledButton(
-            onPressed: () {
-              final q = double.tryParse(ctrl.text.replaceAll(',', '.')) ?? 0;
-              final h = int.tryParse(hargaCtrl.text.trim()) ?? l.harga;
-              if (q <= 0) return;
-              Navigator.pop(
-                ctx,
-                ItemNota(
-                  id: edit?.id,
-                  nama: l.nama,
-                  satuan: l.satuan,
-                  qty: q,
-                  harga: h,
-                ),
-              );
-            },
-            child: const Text('Simpan'),
-          ),
-        ],
-      ),
-    );
-
-    if (hasil == null || !mounted) return;
-    setState(() {
-      if (edit != null) {
-        final i = _items.indexOf(edit);
-        if (i >= 0) _items[i] = hasil;
-      } else {
-        _items.add(hasil);
-      }
-    });
-  }
-
-  /// Baris bebas yang tidak terikat daftar layanan.
-  ///
-  /// Dipakai untuk apa saja: tambah pemutih, hutang, saldo titipan,
-  /// ongkos antar, potongan harga. Satuannya diketik sendiri dan boleh
-  /// dikosongkan, harganya boleh minus untuk diskon atau pengurangan.
-  Future<void> _itemManual({ItemNota? edit}) async {
-    final namaCtrl = TextEditingController(text: edit?.nama ?? '');
-    final qtyCtrl =
-        TextEditingController(text: edit == null ? '1' : qtyStr(edit.qty));
-    final satuanCtrl = TextEditingController(text: edit?.satuan ?? '');
-    final hargaCtrl =
-        TextEditingController(text: edit == null ? '' : edit.harga.toString());
-
-    final hasil = await showDialog<ItemNota>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(edit == null ? 'Item Manual' : 'Ubah Item'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: namaCtrl,
-                autofocus: true,
-                textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(
-                  labelText: 'Nama',
-                  hintText: 'Tambah Pemutih / Hutang / Saldo',
-                ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: qtyCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true),
-                      decoration: const InputDecoration(labelText: 'Jumlah'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextField(
-                      controller: satuanCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Satuan',
-                        hintText: 'botol, paket',
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Satuan boleh dikosongkan, misalnya untuk hutang atau saldo.',
-                  style: TextStyle(fontSize: 11, color: Colors.grey),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: hargaCtrl,
-                keyboardType:
-                    const TextInputType.numberWithOptions(signed: true),
-                decoration: const InputDecoration(
-                  labelText: 'Harga satuan',
-                  prefixText: 'Rp ',
-                  helperText: 'Boleh minus untuk potongan, contoh -5000',
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
-          FilledButton(
-            onPressed: () {
-              final nama = namaCtrl.text.trim();
-              final q = double.tryParse(qtyCtrl.text.replaceAll(',', '.')) ?? 0;
-              final h = int.tryParse(hargaCtrl.text.trim()) ?? 0;
-              if (nama.isEmpty || q == 0) return;
-              Navigator.pop(
-                ctx,
-                ItemNota(
-                  id: edit?.id,
-                  nama: nama,
-                  satuan: satuanCtrl.text.trim(),
-                  qty: q,
-                  harga: h,
-                ),
-              );
-            },
-            child: const Text('Simpan'),
-          ),
-        ],
-      ),
-    );
-
-    if (hasil == null || !mounted) return;
-    setState(() {
-      if (edit != null) {
-        final i = _items.indexOf(edit);
-        if (i >= 0) _items[i] = hasil;
-      } else {
-        _items.add(hasil);
-      }
-    });
-  }
-
-  /// Nota versi sementara dari isian form, tanpa menyimpan ke database.
-  /// Dipakai untuk pratinjau supaya kesalahan input ketahuan lebih dulu.
-  Future<Nota> _notaSementara() async {
+  // Satu-satunya tempat Nota dirakit dari isian form, dipakai untuk
+  // pratinjau maupun simpan.
+  Future<Nota> _susunNota({required bool untukSimpan}) async {
     final lama = widget.notaAwal;
     final now = DateTime.now();
+    final nama = _namaCtrl.text.trim();
+
     final n = Nota(
       id: lama?.id,
       kode: lama?.kode ?? await DB.instance.kodeBerikutnya(now),
-      pelanggan: _namaCtrl.text.trim().isEmpty
-          ? '(nama belum diisi)'
-          : _namaCtrl.text.trim(),
+      pelanggan: untukSimpan
+          ? nama
+          : (nama.isEmpty ? '(nama belum diisi)' : nama),
+      // Timestamp diambil dari jam perangkat.
       dibuatMs: lama?.dibuatMs ?? now.millisecondsSinceEpoch,
-      estimasiMs:
-          _pakaiEstimasi ? _estimasi?.millisecondsSinceEpoch : null,
+      estimasiMs: _pakaiEstimasi ? _estimasi?.millisecondsSinceEpoch : null,
       status: lama?.status ?? StatusPesanan.diterima,
       statusBayar: _statusBayar,
+      dibayarMs: _statusBayar == StatusBayar.lunas
+          ? (lama?.dibayarMs ?? now.millisecondsSinceEpoch)
+          : null,
+      // Uang tidak wajib. Kosong berarti tidak dicatat dan tidak dicetak.
       uangDibayar: int.tryParse(_uangCtrl.text.trim()),
       catatan: _catatanCtrl.text.trim(),
+      // Kosong berarti ikut setelan bawaan di Pengaturan.
       jumlahCetak: int.tryParse(_cetakCtrl.text.trim()),
       ekstra: {
+        // Simpan isian lama yang fieldnya sudah dihapus, supaya nota yang
+        // pernah dibuat tidak kehilangan datanya.
+        if (untukSimpan) ...?lama?.ekstra,
         for (final e in _ekstraCtrl.entries) e.key: e.value.text.trim(),
       },
       items: _items,
@@ -320,12 +137,39 @@ class _NotaBaruScreenState extends State<NotaBaruScreen> {
     return n;
   }
 
-  Future<void> _pratinjauSaja() async {
-    if (_items.isEmpty) {
-      _pesan('Belum ada item layanan.');
+  Future<void> _pilihLayanan() async {
+    final layanan = await DB.instance.layananSemua(hanyaAktif: true);
+    if (!mounted) return;
+    if (layanan.isEmpty) {
+      pesan(context, 'Belum ada layanan. Tambahkan dulu di menu Daftar Layanan.');
       return;
     }
-    final n = await _notaSementara();
+    final dipilih = await pilihLayananSheet(context, layanan);
+    if (dipilih == null || !mounted) return;
+    final item = await dialogQtyLayanan(context, dipilih);
+    if (item == null || !mounted) return;
+    setState(() => _items.add(item));
+  }
+
+  Future<void> _itemManual({ItemNota? edit}) async {
+    final hasil = await dialogItemManual(context, edit: edit);
+    if (hasil == null || !mounted) return;
+    setState(() {
+      if (edit != null) {
+        final i = _items.indexOf(edit);
+        if (i >= 0) _items[i] = hasil;
+      } else {
+        _items.add(hasil);
+      }
+    });
+  }
+
+  Future<void> _pratinjauSaja() async {
+    if (_items.isEmpty) {
+      pesan(context, 'Belum ada item layanan.');
+      return;
+    }
+    final n = await _susunNota(untukSimpan: false);
     if (!mounted) return;
     await tampilkanPratinjau(context, n, bisaCetak: false);
   }
@@ -341,83 +185,56 @@ class _NotaBaruScreenState extends State<NotaBaruScreen> {
     if (d != null && mounted) setState(() => _estimasi = d);
   }
 
-  void _pesan(String s) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(s)));
+  bool _isianLengkap() {
+    if (_namaCtrl.text.trim().isEmpty) {
+      pesan(context, 'Nama pelanggan belum diisi.');
+      return false;
+    }
+    if (_items.isEmpty) {
+      pesan(context, 'Belum ada item layanan.');
+      return false;
+    }
+    return true;
   }
 
   Future<Nota?> _simpan() async {
-    if (_namaCtrl.text.trim().isEmpty) {
-      _pesan('Nama pelanggan belum diisi.');
-      return null;
-    }
-    if (_items.isEmpty) {
-      _pesan('Belum ada item layanan.');
-      return null;
-    }
+    if (!_isianLengkap()) return null;
     setState(() => _menyimpan = true);
+    try {
+      final nota = await _susunNota(untukSimpan: true);
+      nota.id = await DB.instance.notaSimpan(nota);
+      return nota;
+    } finally {
+      if (mounted) setState(() => _menyimpan = false);
+    }
+  }
 
-    final lama = widget.notaAwal;
-    final now = DateTime.now();
-    final nota = Nota(
-      id: lama?.id,
-      kode: lama?.kode ?? await DB.instance.kodeBerikutnya(now),
-      pelanggan: _namaCtrl.text.trim(),
-      // Timestamp diambil dari jam perangkat.
-      dibuatMs: lama?.dibuatMs ?? now.millisecondsSinceEpoch,
-      estimasiMs:
-          _pakaiEstimasi ? _estimasi?.millisecondsSinceEpoch : null,
-      status: lama?.status ?? StatusPesanan.diterima,
-      statusBayar: _statusBayar,
-      dibayarMs: _statusBayar == StatusBayar.lunas
-          ? (lama?.dibayarMs ?? now.millisecondsSinceEpoch)
-          : null,
-      // Uang tidak wajib. Kosong berarti tidak dicatat dan tidak dicetak.
-      uangDibayar: int.tryParse(_uangCtrl.text.trim()),
-      // Kosong berarti ikut setelan bawaan di Pengaturan.
-      jumlahCetak: int.tryParse(_cetakCtrl.text.trim()),
-      catatan: _catatanCtrl.text.trim(),
-      ekstra: {
-        // Simpan isian lama yang fieldnya sudah dihapus, supaya nota
-        // yang pernah dibuat tidak kehilangan datanya.
-        ...?lama?.ekstra,
-        for (final e in _ekstraCtrl.entries) e.key: e.value.text.trim(),
-      },
-      items: _items,
+  // Setelah simpan: mode edit kembali ke pemanggil, mode baru pindah ke
+  // detail nota yang baru dibuat.
+  void _lanjutSetelahSimpan(Nota n) {
+    final id = n.id;
+    if (_modeEdit || id == null) {
+      Navigator.pop(context, true);
+      return;
+    }
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => NotaDetailScreen(notaId: id)),
     );
-    final id = await DB.instance.notaSimpan(nota);
-    nota.id = id;
-    if (mounted) setState(() => _menyimpan = false);
-    return nota;
   }
 
   Future<void> _simpanSaja() async {
     final n = await _simpan();
     if (n == null || !mounted) return;
-    if (_mode_edit) {
-      Navigator.pop(context, true);
-    } else {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => NotaDetailScreen(notaId: n.id!)),
-      );
-    }
+    _lanjutSetelahSimpan(n);
   }
 
-  /// Pratinjau dulu, baru cetak. Kalau pengguna menekan "Perbaiki Dulu",
-  /// tidak ada yang disimpan dan tidak ada kertas yang terpakai.
+  // Pratinjau dulu, baru cetak. Kalau pengguna menekan "Perbaiki Dulu",
+  // tidak ada yang disimpan dan tidak ada kertas yang terpakai.
   Future<void> _simpanDanCetak() async {
-    if (_namaCtrl.text.trim().isEmpty) {
-      _pesan('Nama pelanggan belum diisi.');
-      return;
-    }
-    if (_items.isEmpty) {
-      _pesan('Belum ada item layanan.');
-      return;
-    }
+    if (!_isianLengkap()) return;
 
-    final contoh = await _notaSementara();
+    final contoh = await _susunNota(untukSimpan: false);
     if (!mounted) return;
     final lanjut = await tampilkanPratinjau(context, contoh);
     if (!lanjut || !mounted) return;
@@ -426,21 +243,14 @@ class _NotaBaruScreenState extends State<NotaBaruScreen> {
     if (n == null || !mounted) return;
     final hasil = await PrinterService.instance.cetakNota(n);
     if (!mounted) return;
-    _pesan(hasil.pesan);
-    if (_mode_edit) {
-      Navigator.pop(context, true);
-    } else {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => NotaDetailScreen(notaId: n.id!)),
-      );
-    }
+    pesan(context, hasil.pesan, galat: !hasil.sukses);
+    _lanjutSetelahSimpan(n);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(_mode_edit ? 'Ubah Nota' : 'Nota Baru')),
+      appBar: AppBar(title: Text(_modeEdit ? 'Ubah Nota' : 'Nota Baru')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -470,8 +280,7 @@ class _NotaBaruScreenState extends State<NotaBaruScreen> {
               ),
             ],
             selected: {_pakaiEstimasi},
-            onSelectionChanged: (v) =>
-                setState(() => _pakaiEstimasi = v.first),
+            onSelectionChanged: (v) => setState(() => _pakaiEstimasi = v.first),
           ),
           Padding(
             padding: const EdgeInsets.only(top: 6),
@@ -484,7 +293,6 @@ class _NotaBaruScreenState extends State<NotaBaruScreen> {
               style: const TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ),
-
           const SizedBox(height: 12),
           InkWell(
             onTap: _pakaiEstimasi ? _pilihTanggal : null,
@@ -498,8 +306,7 @@ class _NotaBaruScreenState extends State<NotaBaruScreen> {
                 _pakaiEstimasi
                     ? (_estimasi == null ? '-' : tanggal(_estimasi!))
                     : 'Tidak dipakai',
-                style: TextStyle(
-                    color: _pakaiEstimasi ? null : Colors.grey),
+                style: TextStyle(color: _pakaiEstimasi ? null : Colors.grey),
               ),
             ),
           ),
@@ -533,8 +340,8 @@ class _NotaBaruScreenState extends State<NotaBaruScreen> {
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 24),
               child: Center(
-                child: Text('Belum ada item',
-                    style: TextStyle(color: Colors.grey)),
+                child:
+                    Text('Belum ada item', style: TextStyle(color: Colors.grey)),
               ),
             ),
           ..._items.map(_kartuItem),
@@ -550,7 +357,7 @@ class _NotaBaruScreenState extends State<NotaBaruScreen> {
                 Text(_total < 0 ? 'SISA SALDO' : 'TOTAL',
                     style: const TextStyle(fontWeight: FontWeight.bold)),
                 const Spacer(),
-                Text(rupiah(_total < 0 ? -_total : _total),
+                Text(rupiah(_total.abs()),
                     style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -590,16 +397,19 @@ class _NotaBaruScreenState extends State<NotaBaruScreen> {
               style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ),
-
           const SizedBox(height: 16),
-          TextField(
-            controller: _uangCtrl,
-            keyboardType: TextInputType.number,
-            onChanged: (_) => setState(() {}),
-            decoration: InputDecoration(
-              labelText: 'Uang diterima (opsional)',
-              prefixText: 'Rp ',
-              helperText: _uangKembalianInfo,
+          // Hanya helperText yang berubah tiap ketukan, jadi cukup bagian
+          // ini saja yang dibangun ulang.
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: _uangCtrl,
+            builder: (_, nilai, __) => TextField(
+              controller: _uangCtrl,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: 'Uang diterima (opsional)',
+                prefixText: 'Rp ',
+                helperText: _uangKembalianInfo(nilai.text),
+              ),
             ),
           ),
           const SizedBox(height: 12),
@@ -637,7 +447,6 @@ class _NotaBaruScreenState extends State<NotaBaruScreen> {
                   '(${Settings.instance.jumlahSalinan} lembar)',
             ),
           ),
-
           const SizedBox(height: 24),
           FilledButton.icon(
             onPressed: _menyimpan ? null : _simpanDanCetak,
@@ -694,73 +503,6 @@ class _NotaBaruScreenState extends State<NotaBaruScreen> {
         // Editor manual dipakai untuk semua item, supaya nama, satuan,
         // jumlah, dan harga bisa dibetulkan sekaligus.
         onTap: () => _itemManual(edit: it),
-      ),
-    );
-  }
-}
-
-class _PilihLayananSheet extends StatefulWidget {
-  final List<Layanan> layanan;
-  const _PilihLayananSheet({required this.layanan});
-
-  @override
-  State<_PilihLayananSheet> createState() => _PilihLayananSheetState();
-}
-
-class _PilihLayananSheetState extends State<_PilihLayananSheet> {
-  String _cari = '';
-
-  @override
-  Widget build(BuildContext context) {
-    final data = widget.layanan
-        .where((l) => l.nama.toLowerCase().contains(_cari.toLowerCase()))
-        .toList();
-    return DraggableScrollableSheet(
-      expand: false,
-      initialChildSize: 0.7,
-      maxChildSize: 0.92,
-      builder: (_, controller) => Column(
-        children: [
-          const SizedBox(height: 12),
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.grey.shade400,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: TextField(
-              autofocus: false,
-              onChanged: (v) => setState(() => _cari = v),
-              decoration: const InputDecoration(
-                hintText: 'Cari layanan',
-                prefixIcon: Icon(Icons.search),
-              ),
-            ),
-          ),
-          Expanded(
-            child: ListView.builder(
-              controller: controller,
-              itemCount: data.length,
-              itemBuilder: (_, i) {
-                final l = data[i];
-                return ListTile(
-                  leading: CircleAvatar(
-                    child: Icon(l.satuan == Satuan.kg
-                        ? Icons.scale_outlined
-                        : Icons.checkroom_outlined),
-                  ),
-                  title: Text(l.nama),
-                  subtitle: Text('${rupiah(l.harga)} / ${l.satuan}'),
-                  onTap: () => Navigator.pop(context, l),
-                );
-              },
-            ),
-          ),
-        ],
       ),
     );
   }

@@ -1,21 +1,36 @@
 import 'dart:convert';
 
-/// Model data aplikasi. Semua tersimpan lokal di SQLite pada HP.
+// Model data. Semua tersimpan lokal di SQLite pada HP, tidak ada server.
 
-/// Satuan layanan.
-///
-/// [kg] dan [pcs] hanya pilihan cepat. Satuan sebenarnya bertipe String
-/// bebas, jadi Anda boleh mengetik apa saja: botol, paket, lembar, meter,
-/// bahkan dikosongkan untuk baris seperti hutang atau saldo yang tidak
-/// punya satuan sama sekali.
+// Pembaca kolom SQLite yang tahan tipe tak terduga, supaya satu baris
+// rusak tidak menggagalkan pemuatan seluruh daftar nota.
+int _int(Object? v, [int fallback = 0]) {
+  if (v is int) return v;
+  if (v is num) return v.toInt();
+  if (v is String) return int.tryParse(v) ?? fallback;
+  return fallback;
+}
+
+int? _intOpsional(Object? v) => v == null ? null : _int(v);
+
+double _double(Object? v) {
+  if (v is num) return v.toDouble();
+  if (v is String) return double.tryParse(v) ?? 0;
+  return 0;
+}
+
+String _str(Object? v, [String fallback = '']) =>
+    v == null ? fallback : v.toString();
+
+// kg dan pcs hanya pilihan cepat. Satuan sebenarnya String bebas, boleh
+// diisi apa saja atau dikosongkan untuk baris hutang dan saldo.
 class Satuan {
   static const kg = 'kg';
   static const pcs = 'pcs';
 
-  /// Penanda di dropdown untuk "ketik sendiri".
+  // Penanda di dropdown untuk "ketik sendiri".
   static const lainnya = '__lainnya__';
 
-  static const semua = [kg, pcs];
   static const semuaPlusLainnya = [kg, pcs, lainnya];
 
   static String label(String unit) {
@@ -28,12 +43,11 @@ class Satuan {
 
   static bool bawaan(String unit) => unit == kg || unit == pcs;
 
-  /// "3.5 kg", "1 pcs", atau "1" kalau satuannya kosong.
+  // "3.5 kg", "1 pcs", atau "1" bila satuannya kosong.
   static String gabung(String qty, String unit) =>
       unit.trim().isEmpty ? qty : '$qty ${unit.trim()}';
 }
 
-/// Status pesanan laundry.
 class StatusPesanan {
   static const diterima = 0;
   static const diproses = 1;
@@ -42,24 +56,39 @@ class StatusPesanan {
 
   static const semua = [diterima, diproses, selesai, diambil];
 
-  static String label(int s) {
-    switch (s) {
-      case diterima:
-        return 'Diterima';
-      case diproses:
-        return 'Diproses';
-      case selesai:
-        return 'Selesai';
-      case diambil:
-        return 'Diambil';
-      default:
-        return '-';
-    }
-  }
+  static String label(int s) => switch (s) {
+        diterima => 'Diterima',
+        diproses => 'Diproses',
+        selesai => 'Selesai',
+        diambil => 'Diambil',
+        _ => '-',
+      };
 }
 
-/// Satu jenis layanan laundry, misalnya "Cuci Setrika" 7000/kg
-/// atau "Bed Cover" 25000/pcs.
+// sembunyi dipakai bila baris pembayaran tidak perlu dicetak sama sekali,
+// supaya pengguna tidak dipaksa memilih dan kertas tidak terbuang.
+class StatusBayar {
+  static const belum = 0;
+  static const lunas = 1;
+  static const sembunyi = 2;
+
+  static const semua = [belum, lunas, sembunyi];
+
+  static String label(int s) => switch (s) {
+        lunas => 'LUNAS',
+        sembunyi => 'Tidak ditampilkan',
+        _ => 'BELUM BAYAR',
+      };
+
+  // Teks di struk. Kosong berarti barisnya dilewati.
+  static String teksStruk(int s) => switch (s) {
+        lunas => 'LUNAS',
+        sembunyi => '',
+        _ => 'BELUM BAYAR',
+      };
+}
+
+// Satu jenis layanan, misalnya "Cuci Setrika" 7000/kg.
 class Layanan {
   int? id;
   String nama;
@@ -84,15 +113,15 @@ class Layanan {
       };
 
   factory Layanan.fromMap(Map<String, Object?> m) => Layanan(
-        id: m['id'] as int?,
-        nama: (m['name'] ?? '') as String,
-        satuan: (m['unit'] ?? Satuan.kg) as String,
-        harga: (m['price'] ?? 0) as int,
-        aktif: ((m['active'] ?? 1) as int) == 1,
+        id: _intOpsional(m['id']),
+        nama: _str(m['name']),
+        satuan: _str(m['unit'], Satuan.kg),
+        harga: _int(m['price']),
+        aktif: _int(m['active'], 1) == 1,
       );
 }
 
-/// Satu baris item di dalam nota.
+// Satu baris di dalam nota.
 class ItemNota {
   int? id;
   int? notaId;
@@ -125,13 +154,13 @@ class ItemNota {
       };
 
   factory ItemNota.fromMap(Map<String, Object?> m) => ItemNota(
-        id: m['id'] as int?,
-        notaId: m['order_id'] as int?,
-        nama: (m['name'] ?? '') as String,
-        satuan: (m['unit'] ?? Satuan.kg) as String,
-        qty: ((m['qty'] ?? 0) as num).toDouble(),
-        harga: (m['price'] ?? 0) as int,
-        subtotal: (m['subtotal'] ?? 0) as int,
+        id: _intOpsional(m['id']),
+        notaId: _intOpsional(m['order_id']),
+        nama: _str(m['name']),
+        satuan: _str(m['unit'], Satuan.kg),
+        qty: _double(m['qty']),
+        harga: _int(m['price']),
+        subtotal: _int(m['subtotal']),
       );
 
   ItemNota salin() => ItemNota(
@@ -145,93 +174,26 @@ class ItemNota {
       );
 }
 
-/// Status pembayaran.
-///
-/// [sembunyi] dipakai kalau Anda tidak ingin baris pembayaran tercetak
-/// sama sekali, misalnya untuk menghemat kertas. Dengan begitu pengguna
-/// tidak dipaksa memilih antara "Belum Bayar" atau "Lunas".
-class StatusBayar {
-  static const belum = 0;
-  static const lunas = 1;
-  static const sembunyi = 2;
-
-  static const semua = [belum, lunas, sembunyi];
-
-  static String label(int s) {
-    switch (s) {
-      case lunas:
-        return 'LUNAS';
-      case sembunyi:
-        return 'Tidak ditampilkan';
-      default:
-        return 'BELUM BAYAR';
-    }
-  }
-
-  /// Teks yang dicetak di struk. Kosong berarti barisnya dilewati.
-  static String teksStruk(int s) {
-    switch (s) {
-      case lunas:
-        return 'LUNAS';
-      case sembunyi:
-        return '';
-      default:
-        return 'BELUM BAYAR';
-    }
-  }
-}
-
-/// Nota / pesanan laundry.
 class Nota {
   int? id;
   String kode;
   String pelanggan;
-
-  /// Waktu dibuat, diambil dari jam perangkat (DateTime.now()).
   int dibuatMs;
-
-  /// Estimasi selesai, boleh kosong.
   int? estimasiMs;
-
   int status;
-
-  /// Lihat [StatusBayar]. Disimpan di kolom `paid`.
   int statusBayar;
   int? dibayarMs;
 
-  /// Uang yang diserahkan pelanggan. Boleh kosong, tidak wajib diisi.
+  // Uang yang diserahkan pelanggan. Boleh kosong, tidak wajib diisi.
   int? uangDibayar;
 
   String catatan;
   int total;
 
-  /// Berapa lembar struk dicetak untuk nota INI.
-  /// Kosong berarti mengikuti setelan bawaan di Pengaturan.
+  // Lembar struk untuk nota ini saja. Kosong = ikut setelan bawaan.
   int? jumlahCetak;
 
-  bool get lunas => statusBayar == StatusBayar.lunas;
-
-  /// Total negatif berarti titipan pelanggan lebih besar daripada
-  /// layanan yang dipakai, jadi masih ada sisa saldo. Ini terjadi kalau
-  /// ada baris deposit yang nilainya melebihi tagihan.
-  bool get adaSisaSaldo => total < 0;
-
-  /// Nilai untuk ditampilkan dan dicetak: selalu positif.
-  /// Yang negatif dikalikan -1, karena tanda minus di struk lebih
-  /// membingungkan daripada membantu. Maknanya sudah dibawa oleh
-  /// labelnya, yaitu SISA SALDO.
-  int get nilaiTampil => total < 0 ? -total : total;
-
-  /// "TOTAL" untuk tagihan biasa, "SISA SALDO" kalau pelanggan
-  /// masih punya titipan.
-  String get labelTotal => adaSisaSaldo ? 'SISA SALDO' : 'TOTAL';
-
-  /// Kembalian hanya ada kalau uang benar-benar diisi.
-  int? get kembalian =>
-      uangDibayar == null ? null : (uangDibayar! - total);
-
-  /// Isi field tambahan buatan pengguna, kunci -> nilai.
-  /// Contoh: {'parfum': 'Lavender', 'jenis_cucian': 'Putih'}
+  // Isi field tambahan buatan pengguna: {'parfum': 'Lavender'}
   Map<String, String> ekstra;
 
   List<ItemNota> items;
@@ -255,12 +217,26 @@ class Nota {
         items = items ?? [];
 
   DateTime get dibuat => DateTime.fromMillisecondsSinceEpoch(dibuatMs);
+
   DateTime? get estimasi => estimasiMs == null
       ? null
       : DateTime.fromMillisecondsSinceEpoch(estimasiMs!);
 
-  int hitungTotal() =>
-      items.fold<int>(0, (sum, it) => sum + it.subtotal);
+  int hitungTotal() => items.fold<int>(0, (sum, it) => sum + it.subtotal);
+
+  // Total negatif berarti titipan pelanggan melebihi tagihan, jadi masih
+  // ada sisa saldo. Struk mencetak nilai positif dengan label berbeda,
+  // karena tanda minus lebih membingungkan daripada membantu.
+  bool get adaSisaSaldo => total < 0;
+
+  int get nilaiTampil => total.abs();
+
+  String get labelTotal => adaSisaSaldo ? 'SISA SALDO' : 'TOTAL';
+
+  int? get kembalian {
+    final uang = uangDibayar;
+    return uang == null ? null : uang - total;
+  }
 
   Map<String, Object?> toMap() => {
         if (id != null) 'id': id,
@@ -275,42 +251,42 @@ class Nota {
         'note': catatan,
         'total': total,
         'print_count': jumlahCetak,
-        'extras': _ekstraKeJson(ekstra),
+        'extras': jsonEncode(ekstra),
       };
 
   factory Nota.fromMap(Map<String, Object?> m) => Nota(
-        id: m['id'] as int?,
-        kode: (m['code'] ?? '') as String,
-        pelanggan: (m['customer'] ?? '') as String,
-        dibuatMs: (m['created_at'] ?? 0) as int,
-        estimasiMs: m['due_at'] as int?,
-        status: (m['status'] ?? 0) as int,
-        statusBayar: (m['paid'] ?? 0) as int,
-        dibayarMs: m['paid_at'] as int?,
-        uangDibayar: m['cash'] as int?,
-        catatan: (m['note'] ?? '') as String,
-        total: (m['total'] ?? 0) as int,
-        jumlahCetak: m['print_count'] as int?,
-        ekstra: _ekstraDariJson(m['extras'] as String?),
+        id: _intOpsional(m['id']),
+        kode: _str(m['code']),
+        pelanggan: _str(m['customer']),
+        dibuatMs: _int(m['created_at']),
+        estimasiMs: _intOpsional(m['due_at']),
+        status: _int(m['status']),
+        statusBayar: _int(m['paid']),
+        dibayarMs: _intOpsional(m['paid_at']),
+        uangDibayar: _intOpsional(m['cash']),
+        catatan: _str(m['note']),
+        total: _int(m['total']),
+        jumlahCetak: _intOpsional(m['print_count']),
+        ekstra: _ekstraDariJson(m['extras']),
       );
 }
 
-/// Field tambahan disimpan sebagai satu kolom JSON agar pengguna bisa
-/// menambah atau menghapus field kapan saja tanpa mengubah struktur tabel.
-String _ekstraKeJson(Map<String, String> m) {
-  if (m.isEmpty) return '{}';
-  return jsonEncode(m);
-}
-
-Map<String, String> _ekstraDariJson(String? s) {
-  if (s == null || s.trim().isEmpty) return <String, String>{};
+// Field tambahan disimpan sebagai satu kolom JSON supaya pengguna bisa
+// menambah atau menghapus field tanpa mengubah struktur tabel.
+Map<String, String> _ekstraDariJson(Object? v) {
+  final s = v as String?;
+  if (s == null || s.trim().isEmpty) return {};
   try {
     final d = jsonDecode(s);
     if (d is Map) {
-      return d.map((k, v) => MapEntry(k.toString(), (v ?? '').toString()));
+      return {
+        for (final e in d.entries)
+          if (e.value is String || e.value is num || e.value is bool)
+            e.key.toString(): e.value.toString(),
+      };
     }
   } catch (_) {
-    // Data rusak, anggap kosong daripada membuat aplikasi berhenti.
+    // JSON rusak. Kosongkan saja daripada menggagalkan pemuatan nota.
   }
-  return <String, String>{};
+  return {};
 }

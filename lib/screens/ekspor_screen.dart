@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../db/db.dart';
 import '../export/ekspor.dart';
 import '../models/models.dart';
+import '../ui/umum.dart';
 import '../utils/fmt.dart';
 
 class EksporScreen extends StatefulWidget {
@@ -13,7 +14,7 @@ class EksporScreen extends StatefulWidget {
 }
 
 class _EksporScreenState extends State<EksporScreen> {
-  /// 0 hari ini, 1 tujuh hari, 2 tiga puluh hari, 3 semua
+  // 0 hari ini, 1 tujuh hari, 2 tiga puluh hari, 3 semua.
   int _rentang = 1;
   bool _sibuk = false;
 
@@ -54,6 +55,7 @@ class _EksporScreenState extends State<EksporScreen> {
   }
 
   Future<void> _muat() async {
+    if (!mounted) return;
     setState(() => _memuat = true);
 
     final semua = await DB.instance.notaDaftar(limit: 5000);
@@ -64,12 +66,13 @@ class _EksporScreenState extends State<EksporScreen> {
             .where((n) => n.dibuatMs >= awal.millisecondsSinceEpoch)
             .toList();
 
-    // Ambil itemnya juga, dibutuhkan untuk lembar rincian di Excel.
-    final lengkap = <Nota>[];
-    for (final n in tersaring) {
-      final penuh = await DB.instance.notaAmbil(n.id!);
-      if (penuh != null) lengkap.add(penuh);
-    }
+    // Itemnya diambil sekaligus dalam dua query; satu query per nota
+    // membuat layar membeku saat notanya ribuan.
+    final ids = [
+      for (final n in tersaring)
+        if (n.id != null) n.id!,
+    ];
+    final lengkap = await DB.instance.notaLengkap(ids);
 
     if (!mounted) return;
     setState(() {
@@ -78,20 +81,9 @@ class _EksporScreenState extends State<EksporScreen> {
     });
   }
 
-  void _pesan(String t, {bool galat = false}) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(
-        content: Text(t),
-        backgroundColor: galat ? Colors.red.shade700 : null,
-        duration: const Duration(seconds: 5),
-      ));
-  }
-
   Future<void> _jalankan(bool pdf) async {
     if (_daftar.isEmpty) {
-      _pesan('Tidak ada nota pada rentang ini.');
+      pesan(context, 'Tidak ada nota pada rentang ini.');
       return;
     }
     setState(() => _sibuk = true);
@@ -104,15 +96,14 @@ class _EksporScreenState extends State<EksporScreen> {
 
     if (!mounted) return;
     setState(() => _sibuk = false);
-    _pesan(hasil.pesan, galat: !hasil.sukses);
+    pesan(context, hasil.pesan, galat: !hasil.sukses);
   }
 
   @override
   Widget build(BuildContext context) {
-    final total = _daftar.fold<int>(0, (a, n) => a + n.total);
-    final belum = _daftar
-        .where((n) => n.statusBayar == StatusBayar.belum)
-        .fold<int>(0, (a, n) => a + n.total);
+    // Angka diambil dari Ekspor supaya tidak mungkin beda dengan isi berkas.
+    final total = Ekspor.totalDari(_daftar);
+    final belum = Ekspor.totalBelumBayar(_daftar);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Ekspor Laporan')),
@@ -151,9 +142,9 @@ class _EksporScreenState extends State<EksporScreen> {
                   Text(_keterangan,
                       style: const TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
-                  _baris('Jumlah nota', '${_daftar.length}'),
-                  _baris('Total nilai', rupiah(total)),
-                  _baris('Belum dibayar', rupiah(belum)),
+                  BarisNilai('Jumlah nota', '${_daftar.length}'),
+                  BarisNilai('Total nilai', rupiah(total)),
+                  BarisNilai('Belum dibayar', rupiah(belum)),
                 ],
               ),
             ),
@@ -210,17 +201,5 @@ class _EksporScreenState extends State<EksporScreen> {
                 setState(() => _rentang = nilai);
                 _muat();
               },
-      );
-
-  Widget _baris(String k, String v) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(
-          children: [
-            Text('$k: ', style: const TextStyle(fontSize: 13)),
-            Text(v,
-                style: const TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.bold)),
-          ],
-        ),
       );
 }

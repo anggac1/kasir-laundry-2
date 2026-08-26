@@ -1,15 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../db/db.dart';
 import '../print/receipt.dart';
 import '../store/settings.dart';
+import '../ui/umum.dart';
 
-/// Editor template struk.
-///
-/// Inti fiturnya: pengguna sendiri yang menentukan mana TEKS FLAT
-/// (diketik langsung, dicetak apa adanya) dan mana TEKS BERUBAH
-/// (placeholder dalam kurung kurawal, diisi otomatis dari nota).
+// Editor template struk. Pengguna sendiri yang menentukan mana teks tetap
+// dan mana placeholder dalam kurung kurawal yang diisi otomatis dari nota.
 class TemplateEditorScreen extends StatefulWidget {
   const TemplateEditorScreen({super.key});
 
@@ -23,8 +23,10 @@ class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
   final _fokusUtama = FocusNode();
   final _fokusItem = FocusNode();
 
-  /// 0 = sedang mengedit template utama, 1 = template item
+  // 0 = sedang mengedit template utama, 1 = template item.
   int _aktif = 0;
+
+  Timer? _jeda;
 
   @override
   void initState() {
@@ -42,10 +44,18 @@ class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
     });
   }
 
-  void _refresh() => setState(() {});
+  // Render template penuh mahal, jadi ditunda sebentar supaya tidak
+  // dijalankan ulang pada setiap ketukan tombol.
+  void _refresh() {
+    _jeda?.cancel();
+    _jeda = Timer(const Duration(milliseconds: 250), () {
+      if (mounted) setState(() {});
+    });
+  }
 
   @override
   void dispose() {
+    _jeda?.cancel();
     _utama.dispose();
     _item.dispose();
     _fokusUtama.dispose();
@@ -72,9 +82,7 @@ class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
     await s.setTemplate(_utama.text);
     await s.setTemplateItem(_item.text);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Template tersimpan.')),
-    );
+    pesan(context, 'Template tersimpan.');
   }
 
   Future<void> _reset() async {
@@ -95,6 +103,7 @@ class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
     );
     if (ya != true) return;
     await Settings.instance.resetTemplate();
+    if (!mounted) return;
     setState(() {
       _utama.text = kTemplateBawaan;
       _item.text = kTemplateItemBawaan;
@@ -144,7 +153,7 @@ class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
     );
   }
 
-  /// Placeholder bawaan ditambah field buatan pengguna.
+  // Placeholder bawaan ditambah field buatan pengguna.
   Map<String, String> get _placeholderUtama {
     final m = Map<String, String>.from(Struk.placeholderNota);
     for (final label in Settings.instance.fieldTambahan) {
@@ -153,7 +162,7 @@ class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
     return m;
   }
 
-  /// Pratinjau memakai teks yang SEDANG diketik, bukan yang sudah tersimpan.
+  // Pratinjau memakai teks yang sedang diketik, bukan yang sudah tersimpan.
   String get _pratinjau {
     final cfg = StrukConfig.dari(Settings.instance).salin(
       template: _utama.text,
@@ -314,13 +323,7 @@ class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
           style: const TextStyle(fontSize: 12, color: Colors.grey),
         ),
         const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border.all(color: Colors.grey.shade400),
-            borderRadius: BorderRadius.circular(6),
-          ),
+        KertasPutih(
           child: Text(
             _pratinjau,
             style: const TextStyle(
@@ -334,9 +337,7 @@ class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
         OutlinedButton.icon(
           onPressed: () {
             Clipboard.setData(ClipboardData(text: _utama.text));
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Template disalin ke clipboard.')),
-            );
+            pesan(context, 'Template disalin ke clipboard.');
           },
           icon: const Icon(Icons.copy_all_outlined),
           label: const Text('Salin template'),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../db/db.dart';
 import '../models/models.dart';
+import '../ui/umum.dart';
 import '../utils/fmt.dart';
 
 class LayananScreen extends StatefulWidget {
@@ -42,126 +43,117 @@ class _LayananScreenState extends State<LayananScreen> {
         TextEditingController(text: awalBawaan ? '' : (awal?.satuan ?? ''));
     var aktif = awal?.aktif ?? true;
 
-    final simpan = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) => AlertDialog(
-          title: Text(awal == null ? 'Layanan Baru' : 'Ubah Layanan'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: namaCtrl,
-                  autofocus: true,
-                  textCapitalization: TextCapitalization.words,
-                  decoration:
-                      const InputDecoration(labelText: 'Nama layanan'),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  value: pilihan,
-                  decoration: const InputDecoration(labelText: 'Satuan'),
-                  items: Satuan.semuaPlusLainnya
-                      .map((u) => DropdownMenuItem(
-                          value: u, child: Text(Satuan.label(u))))
-                      .toList(),
-                  onChanged: (v) =>
-                      setLocal(() => pilihan = v ?? Satuan.kg),
-                ),
-                if (pilihan == Satuan.lainnya) ...[
+    try {
+      final simpan = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setLocal) => AlertDialog(
+            title: Text(awal == null ? 'Layanan Baru' : 'Ubah Layanan'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: namaCtrl,
+                    autofocus: true,
+                    textCapitalization: TextCapitalization.words,
+                    decoration:
+                        const InputDecoration(labelText: 'Nama layanan'),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: pilihan,
+                    decoration: const InputDecoration(labelText: 'Satuan'),
+                    items: Satuan.semuaPlusLainnya
+                        .map((u) => DropdownMenuItem(
+                            value: u, child: Text(Satuan.label(u))))
+                        .toList(),
+                    onChanged: (v) => setLocal(() => pilihan = v ?? Satuan.kg),
+                  ),
+                  if (pilihan == Satuan.lainnya) ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: satuanCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Tulis satuannya',
+                        hintText: 'meter, paket, lembar',
+                        helperText: 'Boleh dikosongkan kalau tanpa satuan',
+                      ),
+                      onChanged: (_) => setLocal(() {}),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   TextField(
-                    controller: satuanCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Tulis satuannya',
-                      hintText: 'meter, paket, lembar',
-                      helperText: 'Boleh dikosongkan kalau tanpa satuan',
+                    controller: hargaCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: pilihan == Satuan.lainnya
+                          ? (satuanCtrl.text.trim().isEmpty
+                              ? 'Harga'
+                              : 'Harga per ${satuanCtrl.text.trim()}')
+                          : 'Harga per $pilihan',
+                      prefixText: 'Rp ',
                     ),
-                    onChanged: (_) => setLocal(() {}),
+                  ),
+                  const SizedBox(height: 4),
+                  SwitchListTile(
+                    value: aktif,
+                    onChanged: (v) => setLocal(() => aktif = v),
+                    title: const Text('Aktif'),
+                    subtitle: const Text('Muncul saat membuat nota'),
+                    contentPadding: EdgeInsets.zero,
                   ),
                 ],
-                const SizedBox(height: 12),
-                TextField(
-                  controller: hargaCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: pilihan == Satuan.lainnya
-                        ? (satuanCtrl.text.trim().isEmpty
-                            ? 'Harga'
-                            : 'Harga per ${satuanCtrl.text.trim()}')
-                        : 'Harga per $pilihan',
-                    prefixText: 'Rp ',
-                  ),
-                ),
-                const SizedBox(height: 4),
-                SwitchListTile(
-                  value: aktif,
-                  onChanged: (v) => setLocal(() => aktif = v),
-                  title: const Text('Aktif'),
-                  subtitle: const Text('Muncul saat membuat nota'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ],
+              ),
             ),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Batal')),
+              FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Simpan')),
+            ],
           ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Batal')),
-            FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Simpan')),
-          ],
         ),
-      ),
-    );
+      );
 
-    if (simpan != true) return;
-    final nama = namaCtrl.text.trim();
-    final harga = int.tryParse(hargaCtrl.text.trim()) ?? 0;
-    if (nama.isEmpty || harga <= 0) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Nama dan harga wajib diisi.')),
-        );
+      if (simpan != true) return;
+      final nama = namaCtrl.text.trim();
+      final harga = int.tryParse(hargaCtrl.text.trim()) ?? 0;
+      if (nama.isEmpty || harga <= 0) {
+        if (mounted) pesan(context, 'Nama dan harga wajib diisi.', galat: true);
+        return;
       }
-      return;
-    }
-    final satuanAkhir =
-        pilihan == Satuan.lainnya ? satuanCtrl.text.trim() : pilihan;
+      final satuanAkhir =
+          pilihan == Satuan.lainnya ? satuanCtrl.text.trim() : pilihan;
 
-    await DB.instance.layananSimpan(Layanan(
-      id: awal?.id,
-      nama: nama,
-      satuan: satuanAkhir,
-      harga: harga,
-      aktif: aktif,
-    ));
-    await _muat();
+      await DB.instance.layananSimpan(Layanan(
+        id: awal?.id,
+        nama: nama,
+        satuan: satuanAkhir,
+        harga: harga,
+        aktif: aktif,
+      ));
+      await _muat();
+    } finally {
+      namaCtrl.dispose();
+      hargaCtrl.dispose();
+      satuanCtrl.dispose();
+    }
   }
 
   Future<void> _hapus(Layanan l) async {
-    final ya = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Hapus "${l.nama}"?'),
-        content: const Text(
-            'Nota lama tidak terpengaruh, karena nama dan harga sudah tersimpan di nota masing-masing.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Batal')),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Hapus'),
-          ),
-        ],
-      ),
+    final id = l.id;
+    if (id == null) return;
+    final ya = await konfirmasiHapus(
+      context,
+      judul: 'Hapus "${l.nama}"?',
+      isi: 'Nota lama tidak terpengaruh, karena nama dan harga sudah '
+          'tersimpan di nota masing-masing.',
     );
-    if (ya != true) return;
-    await DB.instance.layananHapus(l.id!);
+    if (!ya) return;
+    await DB.instance.layananHapus(id);
     await _muat();
   }
 
@@ -182,12 +174,12 @@ class _LayananScreenState extends State<LayananScreen> {
           : ListView(
               padding: const EdgeInsets.only(bottom: 88),
               children: [
-                _judul('Kiloan (per kg)', kiloan.length),
+                _seksi('Kiloan (per kg)', kiloan.length),
                 ...kiloan.map(_baris),
-                _judul('Satuan (per pcs)', satuan.length),
+                _seksi('Satuan (per pcs)', satuan.length),
                 ...satuan.map(_baris),
                 if (lainnya.isNotEmpty) ...[
-                  _judul('Satuan lainnya', lainnya.length),
+                  _seksi('Satuan lainnya', lainnya.length),
                   ...lainnya.map(_baris),
                 ],
                 if (_data.isEmpty)
@@ -203,11 +195,10 @@ class _LayananScreenState extends State<LayananScreen> {
     );
   }
 
-  Widget _judul(String t, int n) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
-        child: Text('$t  ($n)',
-            style: const TextStyle(
-                fontWeight: FontWeight.bold, color: Colors.grey)),
+  // JudulSeksi berpadding kecil, digeser agar sejajar dengan ListTile.
+  Widget _seksi(String teks, int jumlah) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: JudulSeksi('$teks  ($jumlah)'),
       );
 
   Widget _baris(Layanan l) => ListTile(

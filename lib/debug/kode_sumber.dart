@@ -1,9 +1,6 @@
-/// Salinan kode logika inti, ditanam sebagai teks supaya bisa dibaca
-/// langsung dari HP saat mencari bug tanpa membuka laptop.
-///
-/// PENTING: ini SALINAN, bukan kode yang benar-benar dijalankan.
-/// Kalau Anda mengubah logika di file aslinya, perbarui juga teks di sini
-/// agar tidak menyesatkan saat debug.
+// Salinan kode logika inti sebagai teks, supaya bisa dibaca langsung dari
+// HP saat mencari bug. Ini SALINAN, bukan kode yang dijalankan: kalau file
+// aslinya berubah, teks di sini harus ikut diperbarui.
 class KodeSumber {
   static const daftar = <PotonganKode>[
     PotonganKode(
@@ -14,11 +11,19 @@ class KodeSumber {
           'round(), jadi 0,5 dibulatkan ke atas. qty bertipe double supaya '
           'berat kiloan bisa desimal, harga bertipe int rupiah penuh.',
       kode: '''class ItemNota {
-  double qty;      // 3.5 untuk 3,5 kg
-  int    harga;    // 7000 (rupiah per satuan)
-  int    subtotal;
+  int? id;
+  int? notaId;
+  String nama;
+  String satuan;
+  double qty;
+  int harga;
+  int subtotal;
 
   ItemNota({
+    this.id,
+    this.notaId,
+    required this.nama,
+    required this.satuan,
     required this.qty,
     required this.harga,
     int? subtotal,
@@ -34,8 +39,8 @@ class KodeSumber {
           'Menjumlahkan subtotal seluruh item. Tidak ada pajak dan tidak ada '
           'diskon. Kalau total di layar tidak cocok, periksa dulu subtotal '
           'tiap item lewat tab Uji Hitung.',
-      kode: '''int hitungTotal() =>
-    items.fold<int>(0, (sum, it) => sum + it.subtotal);''',
+      kode:
+          '''int hitungTotal() => items.fold<int>(0, (sum, it) => sum + it.subtotal);''',
     ),
     PotonganKode(
       judul: 'Penyimpanan nota',
@@ -46,8 +51,8 @@ class KodeSumber {
           'dihapus lalu ditulis ulang supaya tidak ada sisa baris yatim.',
       kode: '''Future<int> notaSimpan(Nota n) async {
   final d = await db;
-  n.total = n.hitungTotal();          // hitung ulang, jangan percaya nilai lama
-  return await d.transaction<int>((txn) async {
+  n.total = n.hitungTotal();
+  return d.transaction<int>((txn) async {
     int id;
     if (n.id == null) {
       id = await txn.insert('orders', n.toMap());
@@ -70,42 +75,46 @@ class KodeSumber {
       judul: 'Nomor nota harian',
       berkas: 'lib/db/db.dart',
       catatan:
-          'Nomor urut dihitung dari BANYAKNYA nota hari itu, bukan dari nomor '
-          'terakhir. Jadi kalau ada nota yang dihapus, nomor berikutnya bisa '
-          'terpakai ulang. Ini titik yang perlu diubah kalau Anda butuh nomor '
-          'yang benar-benar tidak pernah kembar.',
+          'Nomor urut diambil dari kode TERBESAR yang sudah terpakai hari '
+          'itu, bukan dari banyaknya nota. Dengan begitu kode tetap unik '
+          'walau ada nota yang dihapus atau jam HP diubah mundur.',
       kode: '''Future<String> kodeBerikutnya(DateTime now) async {
-  final awal  = DateTime(now.year, now.month, now.day).millisecondsSinceEpoch;
-  final akhir = DateTime(now.year, now.month, now.day, 23, 59, 59, 999)
-                  .millisecondsSinceEpoch;
-  final r = await d.rawQuery(
-    'SELECT COUNT(*) AS c FROM orders WHERE created_at BETWEEN ? AND ?',
-    [awal, akhir],
+  final d = await db;
+  final yy = (now.year % 100).toString().padLeft(2, '0');
+  final mm = now.month.toString().padLeft(2, '0');
+  final dd = now.day.toString().padLeft(2, '0');
+  final awalan = 'LDY-\$yy\$mm\$dd-';
+
+  final rows = await d.rawQuery(
+    'SELECT code FROM orders WHERE code LIKE ? ORDER BY code DESC LIMIT 1',
+    ['\$awalan%'],
   );
-  final n = (r.first['c'] as int) + 1;
-  // LDY-260817-001
-  return 'LDY-\$yy\$mm\$dd-\${n.toString().padLeft(3, '0')}';
+
+  var urut = 1;
+  if (rows.isNotEmpty) {
+    final terakhir = rows.first['code']?.toString() ?? '';
+    final n = int.tryParse(terakhir.split('-').last);
+    if (n != null) urut = n + 1;
+  }
+  return '\$awalan\${urut.toString().padLeft(3, '0')}';
 }''',
     ),
     PotonganKode(
       judul: 'Ringkasan beranda',
       berkas: 'lib/db/db.dart',
       catatan:
-          'Omzet hari ini menjumlahkan SEMUA nota hari itu, termasuk yang '
-          'belum dibayar. Kalau Anda ingin omzet hanya menghitung yang lunas, '
-          'tambahkan AND paid = 1 pada query pertama.',
-      kode: '''-- Omzet dan jumlah nota hari ini
-SELECT COUNT(*) c, COALESCE(SUM(total),0) t
+          'Beranda hanya menampilkan tagihan belum lunas dan cucian yang '
+          'belum diambil. Nota bersaldo (total negatif) sengaja tidak ikut '
+          'mengurangi nilai tagihan, karena itu titipan pelanggan, bukan '
+          'hutang yang batal.',
+      kode: '''-- Nota yang belum dibayar, saldo negatif tidak mengurangi
+SELECT COUNT(*) c,
+       COALESCE(SUM(CASE WHEN total > 0 THEN total ELSE 0 END),0) t
 FROM orders
-WHERE created_at BETWEEN :awal AND :akhir;
+WHERE paid = :belum;
 
--- Nota yang belum dibayar
-SELECT COUNT(*) c, COALESCE(SUM(total),0) t
-FROM orders
-WHERE paid = 0;
-
--- Cucian yang belum diambil (status < 3)
-SELECT COUNT(*) c FROM orders WHERE status < 3;''',
+-- Cucian yang belum diambil (status < diambil)
+SELECT COUNT(*) c FROM orders WHERE status < :diambil;''',
     ),
     PotonganKode(
       judul: 'Format rupiah',
@@ -130,21 +139,31 @@ SELECT COUNT(*) c FROM orders WHERE status < 3;''',
       catatan:
           'Placeholder diganti dengan replaceAll biasa, satu per satu. '
           'Kalau ada placeholder yang tidak berubah saat dicetak, berarti '
-          'kuncinya tidak ada di peta ini, biasanya karena salah ketik.',
+          'kuncinya tidak ada di peta ini, biasanya karena salah ketik. '
+          'Teks diubah ke ASCII lebih dulu karena lebar cetak dihitung dari '
+          'hasil konversi itu.',
       kode: '''static String _isi(String teks, Map<String, String> vars) {
   var out = teks;
   vars.forEach((k, v) => out = out.replaceAll(k, v));
   return out;
 }
 
+final efektif = lebarEfektif(lebar, p.besar);
+final teks = EscPos.keAscii(_isi(p.teks, vars));
+
 // Tag [>] mendorong sisa teks ke kanan
-if (teks.contains('[>]')) {
-  final idx   = teks.indexOf('[>]');
-  final kiri  = teks.substring(0, idx);
-  final kanan = teks.substring(idx + 3);
+final pisah = teks.indexOf('[>]');
+if (pisah >= 0) {
+  final kiri  = teks.substring(0, pisah);
+  final kanan = teks.substring(pisah + 3);
   final sisa  = efektif - kiri.length - kanan.length;
-  if (sisa >= 1) return kiri + ' ' * sisa + kanan;
-  // tidak muat: kanan dipindah ke baris bawah, rata kanan
+
+  if (sisa >= 1) {
+    return [
+      BarisStruk(kiri + ' ' * sisa + kanan, tebal: p.tebal, besar: p.besar)
+    ];
+  }
+  // Tidak muat sebaris: kiri di atas, kanan rata kanan di bawahnya.
 }''',
     ),
     PotonganKode(
@@ -153,23 +172,26 @@ if (teks.contains('[>]')) {
       catatan:
           'Tiap salinan dirender ulang dari awal supaya placeholder {salinan} '
           'bisa berbeda. Byte-nya digabung jadi satu kiriman, jadi printer '
-          'hanya disambungi sekali.',
-      kode: '''List<int> susunBytes(Nota nota, {int? paksaSalinan}) {
+          'hanya disambungi sekali. Banyaknya salinan memakai urutan: '
+          'paksaan langsung, lalu setelan nota ini, baru setelan bawaan.',
+      kode: '''// Urutan: paksaan langsung, lalu setelan nota ini, baru bawaan.
+int jumlahSalinan(Nota nota, [int? paksa]) =>
+    paksa ?? nota.jumlahCetak ?? Settings.instance.jumlahSalinan;
+
+List<int> susunBytes(Nota nota, {int? paksaSalinan}) {
   final s = Settings.instance;
   final cfg = StrukConfig.dari(s);
-  final jumlah = paksaSalinan ?? s.jumlahSalinan;
+  final jumlah = jumlahSalinan(nota, paksaSalinan);
 
   final semua = <int>[];
   for (var i = 0; i < jumlah; i++) {
-    final baris = Struk.render(
-      nota, cfg,
-      salinan: s.labelSalinanKe(i),   // PELANGGAN, ARSIP TOKO, ...
-      salinanKe: i + 1,
-    );
+    final baris = Struk.render(nota, cfg,
+        salinan: s.labelSalinanKe(i), salinanKe: i + 1);
     semua.addAll(EscPos.dariBaris(
       baris,
       barisKosongAkhir: s.barisKosongAkhir,
       potongKertas: s.potongKertas,
+      fontKecil: s.fontKecil,
     ));
   }
   return semua;
@@ -185,9 +207,11 @@ if (teks.contains('[>]')) {
       kode: '''ESC @        1B 40        reset printer
 ESC t 0      1B 74 00     code page PC437
 ESC R 0      1B 52 00     charset USA
+ESC M n      1B 4D n      font: 0 Font A (32 kolom), 1 Font B (42 kolom)
 ESC a n      1B 61 n      rata: 0 kiri, 1 tengah, 2 kanan
 ESC E n      1B 45 n      tebal: 1 nyala, 0 mati
 GS  ! n      1D 21 n      ukuran: 00 normal, 11 dobel
+ESC ! n      1B 21 n      ukuran cadangan untuk printer lama
 GS  V 0      1D 56 00     potong kertas
 LF           0A           baris baru''',
     ),
