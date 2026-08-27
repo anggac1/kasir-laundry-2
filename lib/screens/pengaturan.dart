@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../db/db.dart';
 import '../store/settings.dart';
 import '../ui/umum.dart';
-import 'debug_screen.dart';
 import 'ekspor_screen.dart';
 import 'printer_setup.dart';
 
@@ -338,6 +337,38 @@ class _PengaturanScreenState extends State<PengaturanScreen> {
             ),
           ),
           const Divider(),
+          _seksi('Beranda'),
+          ListTile(
+            leading: Icon(s.hutangOtomatis ? Icons.autorenew : Icons.touch_app_outlined),
+            title: const Text('Angka hutang di beranda'),
+            subtitle: Text(s.hutangOtomatis
+                ? 'Dihitung ulang sendiri setiap ada nota berubah'
+                : 'Ditekan sendiri lewat tombol perbarui di beranda'),
+            trailing: SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment(value: true, label: Text('Auto')),
+                ButtonSegment(value: false, label: Text('Manual')),
+              ],
+              selected: {s.hutangOtomatis},
+              onSelectionChanged: (v) async {
+                await s.setHutangOtomatis(v.first);
+                if (mounted) setState(() {});
+              },
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(
+              'Menghitung angka hutang berarti membaca setiap nota yang '
+              'belum lunas, jadi makin lama makin berat. Selama nota Anda '
+              'masih di bawah sekitar 50.000, biarkan Auto — bedanya tidak '
+              'terasa. Kalau sudah menumpuk dan beranda mulai lambat dibuka, '
+              'pindah ke Manual. Tombol perbarui akan muncul di beranda, '
+              'dengan titik kecil saat angkanya sudah berubah.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ),
+          const Divider(),
           _seksi('Data'),
           const ListTile(
             leading: Icon(Icons.storage_outlined),
@@ -355,17 +386,6 @@ class _PengaturanScreenState extends State<PengaturanScreen> {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const EksporScreen()),
-            ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.bug_report_outlined),
-            title: const Text('Debug'),
-            subtitle: const Text(
-                'Uji hitung, kode logika, dan byte mentah yang dikirim ke printer'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const DebugScreen()),
             ),
           ),
           ListTile(

@@ -1,258 +1,553 @@
 # Kasir Laundry
 
-Aplikasi kasir laundry untuk Android. **Sepenuhnya offline**, tanpa login, tanpa server, tanpa akun.
+Aplikasi kasir laundry untuk Android. Sepenuhnya offline, tanpa login, tanpa server. Semua data tersimpan di HP dalam SQLite.
 
-Dibuat sebagai pengganti Lakasir POS yang mewajibkan login dan menyimpan semua data di server.
+Struk dicetak lewat printer thermal Bluetooth 58mm, disetel untuk RPP02N.
+
+Ini satu-satunya panduan. Semua yang perlu Anda tahu ada di berkas ini.
 
 ---
 
-## Perbandingan dengan Lakasir POS
+## Daftar Isi
 
-| | Lakasir POS | Aplikasi ini |
+1. [Dua cara memakai proyek ini](#1-dua-cara-memakai-proyek-ini)
+2. [Layar terbagi tiga: kode di kiri, HP di kanan](#2-layar-terbagi-tiga-kode-di-kiri-hp-di-kanan)
+3. [Pasang perkakas dari nol](#3-pasang-perkakas-dari-nol)
+4. [Membuat APK lewat GitHub](#4-membuat-apk-lewat-github)
+5. [Mengganti nama dan logo](#5-mengganti-nama-dan-logo)
+6. [Isi aplikasi](#6-isi-aplikasi)
+7. [Cara kerja template struk](#7-cara-kerja-template-struk)
+8. [Kalau baris melipat di printer](#8-kalau-baris-melipat-di-printer)
+9. [Perilaku yang perlu diketahui](#9-perilaku-yang-perlu-diketahui)
+10. [Struktur kode](#10-struktur-kode)
+11. [Ketahanan jangka panjang](#11-ketahanan-jangka-panjang)
+12. [Kalau ada yang gagal](#12-kalau-ada-yang-gagal)
+
+---
+
+## 1. Dua Cara Memakai Proyek Ini
+
+Hanya ada **dua berkas** yang perlu Anda klik. Selebihnya diurus sendiri.
+
+| Berkas | Untuk apa |
+|---|---|
+| `jalankan.bat` | Mengoprek tampilan, hasilnya langsung terlihat di emulator |
+| `push_ke_github.bat` | Membuat APK asli lewat GitHub Actions |
+
+`setup_lokal.bat` ada tapi tidak perlu Anda klik — ia dipanggil sendiri oleh `jalankan.bat` saat pertama kali.
+
+---
+
+## 2. Layar Terbagi Tiga: Kode di Kiri, HP di Kanan
+
+Ini yang membuat mengoprek tampilan jadi cepat.
+
+```
+┌──────────┬─────────────────────┬──────────────┐
+│  Folder  │       Kode          │   Emulator   │
+│          │                     │   (layar HP) │
+│ lib/     │  beranda.dart       │  ┌────────┐  │
+│  screens │                     │  │        │  │
+│  print   │  Text('Nota Baru')  │  │ Kasir  │  │
+│  db      │       ▲             │  │Laundry │  │
+│          │       │             │  │        │  │
+│          │   ubah di sini      │  └────────┘  │
+│          │                     │   berubah    │
+│          │                     │   seketika   │
+└──────────┴─────────────────────┴──────────────┘
+```
+
+Setiap kali Anda menyimpan berkas dengan `Ctrl+S`, tampilan di emulator ikut berubah tanpa build ulang. Namanya **hot reload**, biasanya di bawah satu detik.
+
+### Di VS Code
+
+1. Klik dua kali `jalankan.bat`, tunggu emulator menyala dan aplikasi muncul
+2. Buka VS Code → **File** → **Open Folder** → pilih folder proyek ini
+3. Emulator berjalan di jendelanya sendiri. Seret jendela itu ke sisi kanan layar sampai menempel, lalu seret jendela VS Code ke sisi kiri
+4. Di VS Code tekan **Ctrl+B** untuk memunculkan panel folder di kiri
+
+Untuk hot reload tekan **Ctrl+S**, lalu tekan `r` di jendela hitam milik `jalankan.bat`.
+
+> **Lebih praktis:** setelah emulator menyala, tekan **F5** di VS Code dan biarkan VS Code yang menjalankan aplikasinya. Dengan cara ini `Ctrl+S` langsung memicu hot reload sendiri, tidak perlu menekan `r` di mana pun.
+
+### Di Android Studio
+
+1. **File** → **Open** → pilih folder proyek ini
+2. Di pojok kanan atas, pastikan perangkat terpilih adalah **emulator Android**, bukan "Windows (desktop)". Ini kesalahan tersering dan menghasilkan pesan `No Windows desktop project configured`
+3. Tekan tombol **Run** hijau
+4. Setelah aplikasi jalan, klik ikon **Running Devices** di bilah kanan. Emulator menempel di dalam jendela Android Studio sebagai panel kanan
+
+Semuanya menyatu dalam satu jendela: Project di kiri, editor di tengah, emulator di kanan. Hot reload lewat ikon petir **⚡** atau **Ctrl+\\**.
+
+### Kalau emulator terasa berat
+
+Colok HP asli lewat kabel USB. Hot reload bekerja sama persis, malah lebih cepat.
+
+HP asli **wajib** kalau menguji printer, karena emulator tidak punya Bluetooth sama sekali.
+
+Nyalakan USB Debugging di HP: **Setelan** → **Tentang ponsel** → ketuk **Nomor bentukan** tujuh kali → kembali → **Opsi pengembang** → **USB Debugging**.
+
+---
+
+## 3. Pasang Perkakas dari Nol
+
+Lewati bagian ini kalau di laptop Anda `flutter --version` sudah menampilkan `3.22.3`.
+
+### Yang perlu diunduh
+
+| Aplikasi | Ukuran | Kenapa |
 |---|---|---|
-| Login | Wajib | **Tidak ada** |
-| Database | Server (online) | **SQLite di HP** |
-| Butuh internet | Ya, selalu | **Tidak sama sekali** |
-| Izin INTERNET | Ada | **Tidak ada** |
-| Data pelanggan | Terkirim ke server | **Tidak pernah keluar dari HP** |
-| Template struk | Tidak bisa diubah | **Bisa diedit di dalam aplikasi** |
+| Git for Windows | ~300 MB | Flutter memanggilnya secara internal |
+| Visual Studio Code | ~400 MB | Editor |
+| Android Studio | ~5 GB | Emulator dan Android SDK |
+| JDK 17 | ~190 MB | Flutter 3.22.3 tidak cocok dengan Java 21 |
+| Flutter SDK 3.22.3 | ~1 GB | Versi dikunci agar sama dengan GitHub Actions |
 
-Aplikasi ini bahkan **tidak meminta izin `INTERNET`** di AndroidManifest. Artinya, secara teknis sistem Android sendiri yang mencegahnya mengirim data ke mana pun — bukan sekadar janji, tapi dibatasi di level sistem operasi.
+Sediakan ruang kosong 15 GB.
 
----
+### Kenapa semuanya di D:
 
-## Dua Cara Memakai Proyek Ini
+Flutter dan Android SDK **menulis ke foldernya sendiri** saat berjalan. Di `C:\Program Files` keduanya butuh hak administrator setiap kali, dan itu memunculkan error izin yang membingungkan. Di `D:\Aplikasi` masalah itu tidak ada.
 
-**Cuma butuh APK jadi?** Ikuti bagian di bawah ini — GitHub yang membangunkan, laptop Anda tidak perlu diinstal apa pun.
+Syaratnya: **path tanpa spasi**, dan D: harus partisi internal, bukan flashdisk atau drive jaringan.
 
-**Mau mengubah kode sendiri?** Baca [SETUP_LOKAL.md](SETUP_LOKAL.md) — daftar lengkap yang harus diunduh, ekstensi VS Code, dan cara menjalankan langsung di HP dengan hot reload.
-
----
-
-## Cara Mendapatkan File APK
-
-Anda tidak perlu menginstal apa pun di laptop. GitHub yang akan membangunkan APK-nya secara gratis.
-
-### 1. Buat repositori baru
-
-Buka [github.com/new](https://github.com/new). Isi nama repo bebas, misalnya `kasir-laundry`. Boleh dipilih **Private** — GitHub Actions tetap gratis untuk repo privat. Jangan centang opsi "Add a README file". Klik **Create repository**.
-
-### 2. Unggah semua file
-
-Ekstrak dulu ZIP-nya, lalu **klik dua kali `push_ke_github.bat`** di dalam folder hasil ekstrak. Tempel URL repo Anda saat diminta, dan selesai.
-
-Cara ini dipakai karena **unggah lewat halaman web GitHub sering meratakan struktur folder** — semua file `.dart` mendarat di root, `lib/` hilang, `.github/workflows/` hilang, dan build tidak akan pernah jalan. Script ini memakai Git, yang selalu mempertahankan struktur apa adanya.
-
-Syaratnya cuma [Git for Windows](https://git-scm.com/download/win) sudah terpasang.
-
-<details>
-<summary>Kalau tetap ingin lewat web</summary>
-
-Buka halaman repo → **uploading an existing file**. Masuk ke folder hasil ekstrak, tekan `Ctrl+A` untuk memilih **semua isinya sekaligus** — termasuk folder `lib`, `.github`, dan `android_overrides` — lalu seret semuanya dalam satu tarikan.
-
-Jangan pernah membuka `lib` lalu menyeret file `.dart` satu per satu. Itu penyebab struktur menjadi rata.
-
-Setelah unggah, periksa halaman repo. Yang benar terlihat seperti ini:
+### Susunan folder
 
 ```
-.github/          lib/          android_overrides/
-pubspec.yaml      README.md     setup_lokal.bat
+D:\Aplikasi\
+├── flutter\        Flutter SDK 3.22.3
+├── jdk17\          Java 17
+└── androidsdk\     Android SDK  <-- perhatikan ejaannya
 ```
 
-Kalau yang muncul justru `beranda.dart`, `db.dart`, dan kawan-kawannya berjajar di root, berarti gagal — hapus semuanya dan ulangi.
+> **Ejaan `androidsdk`.** Folder ini memang tertulis tanpa huruf `r` pertama, hasil salah ketik saat setup Android Studio. Dibiarkan apa adanya, tidak perlu diperbaiki: `jalankan.bat` menyisir seluruh `D:\Aplikasi` untuk mencari folder yang berisi `emulator\emulator.exe`, jadi ia tetap menemukannya apa pun namanya. Kalau suatu saat Anda menamai ulang atau memindahkannya, script tetap jalan.
 
-Folder `.github` diawali titik dan sering disembunyikan Windows. Aktifkan **Hidden items** di tab View pada File Explorer.
+### Urutan pemasangan
 
-</details>
+**1. Git** — [git-scm.com/download/win](https://git-scm.com/download/win), opsi bawaan, Next sampai selesai.
 
-### 3. Tunggu build selesai
+**2. VS Code** — [code.visualstudio.com](https://code.visualstudio.com/). Centang **Add to PATH** dan **Open with Code**.
 
-Buka tab **Actions** di repo Anda. Akan ada proses bernama "Build APK" yang berjalan otomatis dengan ikon lingkaran kuning berputar.
+**3. Ekstensi VS Code.** Buka VS Code, tekan `Ctrl+Shift+X`, cari dan pasang **Flutter** (`Dart-Code.flutter`). Ekstensi Dart ikut terpasang otomatis, tidak perlu dicari terpisah.
 
-Prosesnya sekitar 5–10 menit untuk build pertama. Kalau ikonnya berubah jadi centang hijau, build berhasil.
+Yang berikut ini opsional tapi membantu: **Error Lens** (pesan error muncul di sebelah barisnya), **Awesome Flutter Snippets**, **GitLens**.
 
-### 4. Unduh APK
+Cara cepat lewat CMD, kalau tadi Anda mencentang "Add to PATH":
 
-Klik proses build yang sudah selesai. Gulir ke bawah sampai bagian **Artifacts**, lalu klik **kasir-laundry-apk** untuk mengunduh.
+```
+code --install-extension Dart-Code.flutter --install-extension usernamehw.errorlens
+```
 
-Hasil unduhan berupa file ZIP. Ekstrak, dan di dalamnya ada `kasir-laundry.apk`.
+**4. JDK 17** — [adoptium.net/temurin/releases/?version=17](https://adoptium.net/temurin/releases/?version=17), Windows x64, paket `.msi`.
 
-### 5. Pasang di HP
+Saat wizard berjalan jangan langsung Next sampai habis. Pilih **Custom Setup** → **Change** → arahkan ke `D:\Aplikasi\jdk17` → centang **Set JAVA_HOME variable** kalau ditawarkan.
 
-Kirim APK itu ke HP (lewat WhatsApp ke diri sendiri, kabel USB, atau Google Drive), lalu buka filenya.
+Patokan benar: ada berkas `D:\Aplikasi\jdk17\bin\java.exe`.
 
-Android akan menanyakan izin "Instal aplikasi tidak dikenal" karena tidak berasal dari Play Store. Izinkan untuk aplikasi tempat Anda membuka file tersebut, lalu lanjutkan pemasangan.
+**5. Android Studio** — [developer.android.com/studio](https://developer.android.com/studio).
 
----
+Pasang dengan lokasi bawaan. Saat pertama dibuka muncul setup wizard: pilih **Standard**, biarkan ia mengunduh SDK dan emulator. Proses ini 10–30 menit.
 
-## Kalau Build Gagal
+Saat diminta lokasi SDK, arahkan ke `D:\Aplikasi\androidsdk`.
 
-Buka tab Actions, klik proses yang gagal (ikon silang merah), dan lihat langkah mana yang berwarna merah. Beberapa masalah yang mungkin muncul:
+**6. Flutter 3.22.3** — [docs.flutter.dev/install/archive](https://docs.flutter.dev/install/archive), bagian Windows, cari versi **3.22.3**.
 
-**Gagal di langkah "Ambil dependensi"** — biasanya karena versi paket di `pubspec.yaml` sudah tidak tersedia. Buka `pubspec.yaml`, hapus tanda `^` dan nomor versinya sehingga jadi misalnya `sqflite: any`, lalu commit ulang.
+Ekstrak ke `D:\Aplikasi\flutter`. Patokan benar: ada `D:\Aplikasi\flutter\bin\flutter.bat`. Kalau jadi `D:\Aplikasi\flutter\flutter\bin\` berarti kelebihan satu tingkat, pindahkan isinya naik.
 
-**Gagal di langkah "Build APK release"** dengan pesan soal `namespace` — berarti tambalan otomatis belum cukup. Salin pesan errornya dan kirimkan ke saya.
+> **Jangan pakai tombol "Download SDK" di ekstensi VS Code.** Ekstensi selalu mengambil versi stabil terbaru, sedangkan GitHub Actions kita dikunci di 3.22.3. Kalau versinya beda, folder `android/` yang dihasilkan juga beda, dan Anda bisa mengalami kode yang jalan di laptop tapi gagal di GitHub — jenis error yang paling melelahkan dilacak.
 
-**`Cannot run Project.afterEvaluate(Closure) when the project is already evaluated`** — tambalan namespace masuk ke bagian bawah `android/build.gradle`, padahal harus di bagian atas. Sudah diperbaiki sejak versi ini; kalau masih muncul, pastikan `android_overrides/namespace_patch.gradle` dan `.github/workflows/build.yml` benar-benar versi terbaru.
+**7. Environment Variable.**
 
-**Tidak ada proses apa pun di tab Actions** — folder `.github` tidak ikut terunggah. Ulangi langkah 2 dan pastikan folder tersembunyi ikut terbawa.
+Tekan Windows → ketik `environment` → **Edit the system environment variables** → tombol **Environment Variables**.
 
----
+Pakai **kotak atas** saja (*User variables*). Klik **New**:
 
-## Cara Pakai Aplikasi
-
-### Pertama kali dibuka
-
-1. Buka menu titik tiga di kanan atas → **Pengaturan**
-2. Isi nama laundry, alamat, dan nomor telepon
-3. Masuk ke **Pilih printer**, lalu pilih printer thermal Anda
-
-> Printer harus **sudah dipasangkan lebih dulu** lewat Pengaturan Bluetooth bawaan HP. Aplikasi ini hanya menampilkan perangkat yang sudah terpasang, tidak melakukan pemindaian sendiri.
-
-4. Tekan **Tes Cetak** untuk memastikan hasilnya rapi
-5. Buka menu → **Daftar Layanan**, sesuaikan daftar dan harganya
-
-Aplikasi sudah berisi 10 contoh layanan (cuci kering, cuci setrika, bed cover, sepatu, dan lain-lain). Silakan ubah atau hapus sesuai laundry Anda.
-
-### Membuat nota
-
-Tekan tombol **Nota Baru**, isi nama pelanggan, tambahkan item layanan, lalu simpan. Untuk layanan kiloan, berat boleh desimal seperti `3.5`.
-
-Harga tiap item masih bisa diubah khusus untuk nota itu saja, tanpa mengubah daftar harga utama.
-
-### Cetak beberapa salinan
-
-**Pengaturan → Salinan Struk.** Pilih 1–3 lembar dan atur judul tiap lembar, bawaannya `PELANGGAN,ARSIP TOKO`. Placeholder `{salinan}` berisi judul lembar itu, jadi satu template menghasilkan lembar yang berbeda-beda. Semua lembar dikirim sebagai satu paket, printer hanya disambungi sekali.
-
-### Field tambahan buatan sendiri
-
-**Pengaturan → Field Tambahan.** Ketik nama field, misalnya "Parfum", dan placeholder `{parfum}` dibuat otomatis. Kolom isiannya muncul di layar Nota Baru, dan placeholder-nya bisa dipasang di mana saja pada template struk. Nama dua kata jadi garis bawah: "Jenis Cucian" → `{jenis_cucian}`.
-
-Menghapus field tidak merusak nota lama — isian yang sudah tersimpan tetap ada di dalamnya.
-
-### Ekspor laporan
-
-**Pengaturan → Data → Ekspor laporan.** Pilih rentang waktu, lalu ekspor sebagai PDF (laporan A4 berkop) atau Excel (dua lembar: ringkasan per nota, dan rincian tiap item). Berkasnya lewat menu berbagi bawaan HP, jadi bisa disimpan ke mana saja atau dikirim lewat WhatsApp.
-
-### Layar debug
-
-**Pengaturan → Data → Debug.** Tiga tab: **Uji Hitung** untuk menelusuri rumus dan mengaudit seluruh nota, **Kode Logika** berisi salinan kode inti dengan catatan jebakannya, dan **Struk Mentah** yang menampilkan hasil render template plus hex dump byte ESC/POS.
-
-Perlu diingat tab Kode Logika adalah salinan teks, bukan kode yang benar-benar berjalan. Kalau Anda mengubah logika, perbarui juga `lib/debug/kode_sumber.dart`.
-
-### Printer RPP02N
-
-**Pengaturan → Printer → Pakai profil RPP02N** menyetel semuanya sekaligus: 58mm, 32 karakter, Font A, tanpa pisau potong. RPP02N memakai 384 dot per baris dan ESC/POS standar, jadi cocok dengan setelan bawaan.
-
-Jangan menyalakan "Potong kertas otomatis" — RPP02N tidak punya pisau, dan perintah potong bisa membuatnya menggantung. Ada juga opsi Font B kalau ingin muat 42 karakter per baris; ingat ubah Lebar kertas jadi 42 kalau opsi itu dinyalakan.
-
-### Status pesanan dan pembayaran
-
-Keduanya dilacak terpisah, karena pelanggan laundry sering bayar di belakang:
-
-- **Status pesanan:** Diterima → Diproses → Selesai → Diambil
-- **Status bayar:** Belum Bayar / Lunas
-
-Status bayar punya tiga pilihan: **Belum**, **Lunas**, dan **Sembunyi**. Pilih Sembunyi kalau baris pembayaran tidak perlu tercetak — Anda tidak dipaksa memilih salah satu yang keliru.
-
-Kalau pelanggan membayar saat mengambil cucian, cukup buka notanya dan ketuk **Lunas**. Hanya baris itu yang berubah, tidak perlu cetak ulang, dan waktu pelunasan tercatat otomatis memakai jam HP.
-
-Ada juga kolom **Uang diterima** yang opsional. Kembalian dihitung otomatis. Kalau dikosongkan, baris uang dan kembalian tidak ikut tercetak sama sekali — ini memakai tag `[?kunci]` pada template, yang melewati baris bila nilainya kosong.
-
-Di beranda ada filter cepat untuk melihat nota yang **Belum Lunas** atau yang **belum diambil**.
-
----
-
-## Mengatur Teks Struk
-
-Ini bagian yang paling bisa Anda atur sendiri. Buka menu → **Template Struk**.
-
-Isi struk bawaan sengaja diisi teks *lorem ipsum* supaya panjang barisnya terlihat. Silakan ganti seluruhnya dengan kata-kata Anda sendiri.
-
-### Teks flat dan teks berubah
-
-**Teks flat** adalah semua yang Anda ketik biasa. Dicetak persis sama di setiap struk — cocok untuk nama laundry, alamat, syarat & ketentuan, dan ucapan terima kasih.
-
-**Teks berubah** ditulis dalam kurung kurawal dan diganti otomatis sesuai isi nota. Tekan tombol placeholder di bagian bawah layar untuk menyisipkannya, tidak perlu mengetik manual.
-
-| Placeholder | Berubah menjadi |
+| Variable name | Variable value |
 |---|---|
-| `{nama_toko}` | Nama laundry dari Pengaturan |
-| `{alamat_toko}` | Alamat laundry |
-| `{telepon_toko}` | Telepon / WA |
-| `{no_nota}` | Nomor nota, contoh LDY-260816-001 |
-| `{tanggal}` `{jam}` `{hari}` | Waktu nota dibuat, dari jam HP |
-| `{nama_pelanggan}` | Nama pelanggan |
-| `{estimasi}` | Perkiraan tanggal selesai |
-| `{status_pesanan}` | Diterima / Diproses / Selesai / Diambil |
-| `{status_bayar}` | LUNAS atau BELUM BAYAR |
-| `{total}` | Total harga |
-| `{jumlah_item}` | Banyaknya baris item |
-| `{catatan}` | Catatan nota |
-| `{daftar_item}` | Seluruh daftar item |
+| `JAVA_HOME` | `D:\Aplikasi\jdk17` |
 
-Khusus di tab **Baris Item**, tersedia `{no}`, `{nama_item}`, `{qty}`, `{satuan}`, `{harga}`, dan `{subtotal}`.
+Lalu cari baris **Path** di kotak atas → **Edit** → **New** → ketik:
 
-### Tag pengatur tampilan
+```
+D:\Aplikasi\flutter\bin
+```
 
-Ditulis di awal baris, boleh digabung seperti `[B][C]` atau `[BC]`:
+Android SDK tidak perlu ditambahkan ke Path; `jalankan.bat` mencarinya sendiri.
 
-| Tag | Fungsi |
-|---|---|
-| `[C]` | Rata tengah |
-| `[R]` | Rata kanan |
-| `[L]` | Rata kiri (bawaan) |
-| `[B]` | Huruf tebal |
-| `[H]` | Huruf besar dobel |
+**8. Tutup semua jendela CMD dan VS Code, lalu buka lagi.** Wajib. Variabel baru tidak berlaku di jendela yang sudah terlanjur terbuka. Ini penyebab nomor satu dari error "perintah tidak dikenali" padahal semua sudah benar.
 
-Dua tag khusus:
+**9.** Buka CMD **baru** — tekan Windows, ketik `cmd`, Enter. **Jangan** pilih "Run as administrator": CMD Administrator memakai Environment Variable akun yang berbeda, sehingga `flutter` dilaporkan tidak dikenal walau semuanya sudah benar. Cirinya, CMD Administrator terbuka di `C:\Windows\System32`, sedangkan CMD biasa di `C:\Users\NamaAnda`.
 
-- `[>]` mendorong sisa teks ke pinggir kanan. Contoh `TOTAL[>]{total}` menghasilkan `TOTAL` di kiri dan nominalnya menempel di kanan.
-- `---` (tiga strip atau lebih) membuat garis pemisah selebar kertas. Bisa juga `===` atau `***`.
+```
+flutter --version
+```
 
-Teks yang terlalu panjang otomatis dipotong ke baris berikutnya agar muat di lebar kertas.
+Harus muncul `Flutter 3.22.3`. Perintah pertama bisa memakan 1–5 menit karena Flutter sedang mengunduh Dart SDK ke foldernya sendiri; ini sekali saja.
 
-### Melihat hasilnya
+```
+flutter config --jdk-dir D:\Aplikasi\jdk17
+flutter doctor --android-licenses
+```
 
-Tab **Pratinjau** menampilkan contoh struk memakai data nota palsu, langsung dari teks yang sedang Anda ketik. Jangan lupa tekan ikon simpan di kanan atas.
+Ketik `y` untuk semua pertanyaan lisensi.
 
-Kalau hasil editan berantakan, ikon **↺** di kanan atas mengembalikan template ke bawaan.
+**10. Buat emulator.** Android Studio → **Tools** → **Device Manager** → **Create Virtual Device** → **Pixel 4a** → pilih **API 34**.
+
+> Hindari baris yang bertuliskan **Preview**, **beta**, **DEV**, atau **CANARY**. Versi itu sering gagal diunduh dengan pesan `404`.
+
+**11. Selesai.** Klik dua kali `jalankan.bat`.
+
+### Kalau Flutter terasa lambat
+
+**Windows Defender memindai tiap berkas.** Flutter menyentuh puluhan ribu berkas kecil setiap kali berjalan, dan Defender memeriksa satu per satu. Perintah yang harusnya 3 detik bisa jadi 30 detik.
+
+Kecualikan foldernya: Windows Security → **Virus & threat protection** → **Manage settings** → **Exclusions** → **Add an exclusion** → **Folder**:
+
+```
+D:\Aplikasi\flutter
+D:\Aplikasi\androidsdk
+D:\Kuliah_ML\Claude\kasir-laundry-source
+```
+
+Ini aman — yang dikecualikan hanya folder perkakas yang isinya Anda kendalikan sendiri.
+
+**D: mungkin bukan SSD.** Banyak laptop dikirim dengan C: berupa SSD dan D: berupa HDD. Cek lewat Windows → ketik `defragment` → **Defragment and Optimize Drives**, lihat kolom *Media type*. Kalau D: ternyata HDD, build tetap berhasil tapi lebih lambat.
 
 ---
 
-## Struktur Kode
+## 4. Membuat APK lewat GitHub
+
+Build lokal butuh Gradle mengunduh ~1 GB. Kalau Anda hanya ingin APK jadi, GitHub Actions lebih praktis: gratis, dan hasilnya selalu sama.
+
+### Pertama kali
+
+**1.** Buka [github.com/new](https://github.com/new). Isi nama repo, misalnya `kasir-laundry`.
+
+| Kolom | Isi |
+|---|---|
+| Add a README file | **jangan dicentang** |
+| Add .gitignore | **jangan dipilih** |
+| Choose a license | **jangan dipilih** |
+
+Ketiganya harus kosong. Kalau dicentang, GitHub membuat commit awal sendiri dan itu berbenturan dengan unggahan kita.
+
+**2.** Klik **Create repository**, salin URL-nya.
+
+**3.** Klik dua kali `push_ke_github.bat`. Tempel URL (klik kanan untuk menempel, `Ctrl+V` sering tidak berfungsi di CMD), ketik `Y`.
+
+**4.** Buka repo di browser, masuk tab **Actions**. Build berjalan otomatis, tunggu 5–10 menit sampai muncul centang hijau.
+
+**5.** Di halaman build yang selesai, gulir ke bagian **Artifacts**, klik **kasir-laundry-apk**. Hasilnya ZIP; ekstrak, di dalamnya ada `kasir-laundry.apk`.
+
+**6.** Kirim ke HP lewat kabel USB atau WhatsApp ke diri sendiri, lalu buka berkasnya.
+
+> **Copot dulu aplikasi lama** sebelum memasang yang baru. Data nota akan ikut terhapus, jadi ekspor dulu lewat Pengaturan kalau masih ada nota penting.
+
+### Perubahan berikutnya
+
+Klik dua kali `push_ke_github.bat` lagi. URL-nya diingat, cukup tekan Enter.
+
+Script itu juga memperbarui `.github/workflows/build.yml` dari `ci/build.yml.txt` setiap kali dijalankan, jadi workflow tidak pernah tertinggal versi tanpa Anda sadari.
+
+### Yang tidak ikut terunggah
+
+Repo di GitHub sengaja hanya berisi yang dibutuhkan untuk build. Berkas `.bat`, folder `_to_delete`, dan `.md` selain README ini diabaikan lewat `.gitignore`.
+
+Folder `android/` juga tidak ikut — kerangkanya dibuat ulang otomatis oleh Flutter saat build.
+
+---
+
+## 5. Mengganti Nama dan Logo
+
+Bawaannya memakai logo Flutter dengan nama **Kasir Laundry**. Ini sengaja, supaya build tidak pernah gagal walau Anda belum menyiapkan gambar sendiri.
+
+### Nama di bawah ikon
+
+Berkas `android_overrides/AndroidManifest.xml`:
+
+```xml
+android:label="Kasir Laundry"
+```
+
+### Judul di dalam aplikasi
+
+Berkas `lib/main.dart`:
+
+```dart
+title: 'Kasir Laundry',
+```
+
+### Warna tema
+
+Juga di `lib/main.dart`. Seluruh warna aplikasi diturunkan otomatis dari satu warna ini:
+
+```dart
+ColorScheme.fromSeed(seedColor: const Color(0xFF00695C))
+```
+
+### Logo
+
+Ikon ada di `android/app/src/main/res/`, tersebar di lima folder menurut kerapatan layar:
+
+| Folder | Ukuran |
+|---|---|
+| `mipmap-mdpi` | 48 x 48 |
+| `mipmap-hdpi` | 72 x 72 |
+| `mipmap-xhdpi` | 96 x 96 |
+| `mipmap-xxhdpi` | 144 x 144 |
+| `mipmap-xxxhdpi` | 192 x 192 |
+
+Di tiap folder ada `ic_launcher.png`. Timpa kelimanya, ukurannya harus persis.
+
+Cara praktis membuat kelima ukuran sekaligus: [icon.kitchen](https://icon.kitchen), unggah gambar, unduh hasilnya, salin isi foldernya.
+
+> **Peringatan.** Folder `android/` dibuat ulang otomatis setiap build GitHub Actions dan setiap `jalankan.bat` berjalan di folder baru. Artinya **ikon yang Anda timpa akan hilang** saat itu terjadi. Kalau sudah mantap dengan logonya, beri tahu saya — ikonnya perlu disimpan di `android_overrides/` supaya ikut disalin otomatis seperti AndroidManifest.
+
+---
+
+## 6. Isi Aplikasi
+
+**Beranda** — daftar nota, pencarian, kartu jumlah hutang, saringan "belum lunas"
+
+**Nota baru** — pilih layanan dari daftar, atau isi baris manual untuk hal yang tidak punya tarif tetap seperti hutang, saldo titipan, atau tambahan pemutih. Satuan bebas diketik, boleh juga dikosongkan.
+
+**Layanan** — daftar tarif. Sudah terisi sepuluh contoh, silakan ubah atau hapus.
+
+**Template struk** — Anda mengatur sendiri mana teks tetap dan mana yang berubah. Ada pratinjau langsung di sebelahnya.
+
+**Printer** — pilih perangkat Bluetooth, tes cetak contoh, atur lebar kertas.
+
+**Ekspor** — PDF dan Excel untuk rekap.
+
+**Panduan** — panduan pemakaian di dalam aplikasi, tiga bagian: Mulai untuk yang baru memasang, Masalah untuk keluhan yang sering muncul, dan Lanjutan untuk mengoprek template. Ada di menu titik tiga, paling bawah.
+
+Tidak ada status pesanan (Diterima, Diproses, Selesai, Diambil). Sengaja dibuang: menambah tombol yang jarang dipakai, memperpanjang struk, dan tidak cocok untuk laundry yang notanya langsung selesai.
+
+---
+
+## 7. Cara Kerja Template Struk
+
+Teks biasa dicetak apa adanya. Teks dalam kurung kurawal diganti data nota.
+
+**Tag di awal baris**, boleh digabung seperti `[BC]`:
+
+| Tag | Arti |
+|---|---|
+| `[L]` `[C]` `[R]` | rata kiri, tengah, kanan |
+| `[B]` | tebal |
+| `[H]` | huruf besar dua kali |
+| `[?kunci]` | lewati baris ini kalau `{kunci}` kosong |
+
+**Tag di tengah baris:**
+
+`[>]` mendorong sisa teks ke kanan. `TOTAL[>]{total}` menghasilkan `TOTAL              Rp49.500`.
+
+Baris berisi `---` menjadi garis pemisah selebar kertas.
+
+Tag `[?kunci]` yang menghemat kertas. Baris `[?uang]Tunai[>]{uang}` hanya tercetak kalau Anda benar-benar mengisi uang yang diterima. Kalau dikosongkan, barisnya hilang sama sekali.
+
+Daftar lengkap placeholder ada di dalam aplikasi, di layar Template Struk.
+
+---
+
+## 8. Kalau Baris Melipat di Printer
+
+Kadang satu baris yang di layar jelas muat, di kertas malah jadi dua baris.
+
+**Penyebabnya hampir selalu lebar kolom.** Aplikasi memotong baris pada angka *Lebar kertas* di Pengaturan, bawaannya **32**. Kalau printer Anda sebenarnya hanya muat 31 — misalnya karena menambah margin kiri sedikit — maka baris yang panjangnya pas 32 akan melipat.
+
+Baris terpanjang di template bawaan panjangnya **31 karakter**, jadi sisanya cuma satu. Begitu ada nominal besar seperti `Rp1.250.000`, batas itu terlampaui.
+
+**Perbaikannya gratis:** buka **Pengaturan** → **Lebar kertas** → ubah dari `32` jadi `31`. Cetak ulang nota yang tadi melipat.
+
+Kalau masih melipat, turunkan lagi ke `30`. Kalau sampai 30 pun masih melipat, berarti penyebabnya bukan lebar kolom — beri tahu saya.
+
+> **Kenapa tidak dicetak sebagai gambar saja?** Itu memang menjamin baris persis seperti di layar, tapi harganya mahal: data yang dikirim ke printer membengkak **26–33 kali lipat**, sehingga cetak dua lembar naik dari 0,3 detik jadi **9–11 detik**. Baterai printer juga lebih boros dan kepalanya lebih lama panas. Menurunkan satu angka jauh lebih murah.
+
+---
+
+## 9. Perilaku yang Perlu Diketahui
+
+**Total negatif jadi SISA SALDO.** Kalau pelanggan menitipkan uang lebih besar daripada tagihan, totalnya negatif. Struk mencetak nilai positif dengan label `SISA SALDO`, bukan angka minus.
+
+**Estimasi bisa dimatikan.** Kalau nota Anda dicetak di akhir saat cucian sudah bersih, estimasi tidak ada gunanya. Matikan lewat tombol di layar nota, barisnya otomatis hilang dari struk.
+
+**Jumlah lembar per nota.** Tiap nota bisa punya jumlah cetaknya sendiri. Kosongkan untuk mengikuti bawaan di Pengaturan.
+
+**Status pembayaran boleh disembunyikan.** Pilihan "Sembunyi" membuat baris pembayaran tidak tercetak sama sekali.
+
+**Waktu memakai jam HP.** Tidak ada sinkronisasi ke mana pun.
+
+**Nomor nota tidak pernah bentrok.** Nomor diambil dari nomor tertinggi yang sudah terpakai hari itu, bukan dari jumlah nota. Jadi menghapus nota lalu membuat yang baru tidak akan menghasilkan nomor ganda.
+
+---
+
+## 10. Struktur Kode
 
 ```
 lib/
-├── main.dart                    Titik masuk aplikasi
-├── models/models.dart           Layanan, Nota, ItemNota, status
-├── db/db.dart                   SQLite lokal, semua query
-├── store/settings.dart          Pengaturan + template bawaan
+├── main.dart              Titik masuk, tema, nama aplikasi
+├── models/models.dart     Nota, ItemNota, Layanan
+├── db/db.dart             SQLite, semua query
+├── store/settings.dart    Pengaturan + template bawaan
 ├── print/
-│   ├── receipt.dart             Mesin template: placeholder & tag
-│   ├── escpos.dart              Penyusun byte ESC/POS
-│   └── printer_service.dart     Koneksi Bluetooth
-├── screens/
-│   ├── beranda.dart             Daftar nota, ringkasan, filter
-│   ├── nota_baru.dart           Buat & ubah nota
-│   ├── nota_detail.dart         Detail, status, cetak
-│   ├── layanan.dart             Kelola layanan & harga
-│   ├── template_editor.dart     Editor struk
-│   ├── pengaturan.dart          Pengaturan umum
-│   └── printer_setup.dart       Pilih printer & tes cetak
-└── utils/fmt.dart               Format rupiah & tanggal
+│   ├── receipt.dart       Mesin template, tag dan placeholder
+│   ├── escpos.dart        Penyusun byte printer
+│   └── printer_service.dart  Bluetooth
+├── screens/               Semua layar
+├── ui/umum.dart           Widget dan dialog yang dipakai berulang
+└── utils/fmt.dart         Format rupiah, tanggal, qty
 ```
 
-Folder `android/` tidak ada di repo karena dibuat otomatis oleh GitHub Actions. Yang disimpan hanya `android_overrides/AndroidManifest.xml`, berisi daftar izin dan nama aplikasi.
+Yang paling sering diubah saat mengoprek tampilan: `lib/screens/`.
 
 ---
 
-## Catatan Penting
+## 11. Ketahanan Jangka Panjang
 
-**Tidak ada cadangan otomatis.** Semua data hanya ada di HP itu. Kalau HP hilang, rusak, atau aplikasinya dicopot, seluruh riwayat nota ikut hilang. Ini konsekuensi langsung dari database yang sepenuhnya lokal. Kalau nanti Anda butuh fitur ekspor ke file atau cadangan otomatis, tinggal bilang.
+Aplikasi ini dirancang supaya tetap ringan setelah dipakai bertahun-tahun, di HP dengan RAM 4 GB.
 
-**APK ditandatangani kunci debug.** Karena tidak ada keystore yang disiapkan, Flutter memakai kunci debug bawaan. Aplikasinya tetap bisa dipasang dan dipakai normal. Yang perlu diingat: kalau nanti Anda membuat keystore sendiri, aplikasi harus dicopot dulu sebelum memasang versi baru, karena Android menolak pembaruan dengan tanda tangan berbeda.
+**Yang sudah diukur.** Database diisi **200.000 nota** dan 400.000 item, lalu tiap query yang dipakai aplikasi diukur. Kolom paling kanan adalah perkiraan di HP kelas bawah, yang kira-kira delapan kali lebih lambat daripada laptop:
 
-**Printer Bluetooth Classic.** Kode ini memakai jalur Bluetooth Classic (SPP), yang dipakai hampir semua printer thermal murah. Printer harus dipasangkan lewat pengaturan HP terlebih dahulu.
+| Yang dikerjakan | Laptop | HP kelas bawah |
+|---|---|---|
+| Memuat daftar nota di beranda | 0,5 ms | 4 ms |
+| Menyaring "belum lunas" | 0,3 ms | 3 ms |
+| Kartu hutang, hitungan pertama | 7,2 ms | 58 ms |
+| Kartu hutang, sesudah disimpan | 0,002 ms | 0 ms |
+| Mencari nomor nota berikutnya | 0,004 ms | 0 ms |
+| Menyiapkan ekspor 30 hari | 5,6 ms | 45 ms |
 
-**Belum diuji di perangkat nyata.** Kode ini ditulis tanpa kesempatan menjalankannya di HP. Kalau ada layar yang error atau hasil cetak tidak rapi, kirimkan pesan errornya dan akan saya perbaiki.
+Membuka aplikasi dari nol memakan sekitar **50 ms** di HP kelas bawah, jauh di bawah ambang yang mulai terasa oleh mata.
+
+Tanpa indeks yang tepat, angka-angka itu jauh berbeda: menyaring "belum lunas" 160 ms, kartu hutang 147 ms, dan mencari nomor nota 78 ms — ketiganya cukup untuk membuat aplikasi terasa tersendat setiap kali dibuka.
+
+**Cache dipakai secukupnya, di satu tempat saja.** Angka kartu hutang di beranda disimpan di memori, karena menghitungnya berarti membaca setiap nota yang belum lunas — sekitar 58 ms di HP lambat pada 200.000 nota, dan terus tumbuh seiring nota bertambah. Setelah disimpan, membacanya praktis nol.
+
+Yang disimpan hanya **dua bilangan**, sekitar 100 byte, bukan salinan data. Jadi tidak menambah pemakaian memori dan tidak membuat berkas membengkak.
+
+**Auto atau manual, Anda yang menentukan.** Di Pengaturan, bagian Beranda, ada pilihan bagaimana angka itu diperbarui:
+
+- **Auto** (bawaan) — dihitung ulang sendiri setiap ada nota yang berubah. Selama notanya belum menumpuk, bedanya tidak terasa.
+- **Manual** — tidak pernah dihitung sendiri. Tombol perbarui muncul di beranda, di sebelah kiri menu titik tiga, dengan titik kecil saat angkanya sudah berubah. Tekan saat memang perlu.
+
+Ambang pindahnya sekitar **50.000 nota**. Di bawah itu, hitung ulang masih di bawah 12 ms bahkan di HP lambat, jadi Auto lebih nyaman. Di atas itu, Manual menghilangkan beban sepenuhnya:
+
+| Jumlah nota | Sekali hitung, HP kelas bawah |
+|---|---|
+| 1.000 | 1 ms |
+| 10.000 | 3 ms |
+| 50.000 | 12 ms |
+| 100.000 | 29 ms |
+| 200.000 | 54 ms |
+
+Pada mode Auto, angkanya dibuang setiap kali ada nota disimpan, dihapus, dilunasi, atau seluruh data dikosongkan — empat jalur itu semuanya sudah ditutup, sehingga angka di layar tidak mungkin basi.
+
+Daftar nota sendiri **tidak** di-cache. Isinya berubah tiap kali Anda mengetik di kolom pencarian atau menekan saringan, jadi menyimpannya hanya membuang memori tanpa mempercepat apa pun.
+
+**Dua query dijalankan bersamaan.** Saat beranda dibuka, daftar nota dan angka hutang diambil serentak, bukan bergantian. Waktu totalnya jadi yang terlama saja, bukan dijumlah.
+
+**Yang dimuat ke memori dibatasi.** Beranda memuat 300 nota terbaru saja (~0,1 MB), bukan seluruh isi database. Layar ekspor dibatasi 5.000 nota (~5 MB termasuk itemnya). Penyaringan tanggal dikerjakan SQLite, bukan dengan menarik ribuan nota lalu membuang sebagian besarnya.
+
+**Ekspor diproses per 500 nota.** Bukan pembatasan jumlah — kelimaribunya tetap terekspor. Android hanya mengizinkan satu perintah database membawa maksimal 999 nilai sekaligus, jadi permintaannya dipecah jadi beberapa giliran. Tanpa ini, ekspor ribuan nota gagal total dengan pesan `too many SQL variables`.
+
+**Tiga indeks, tidak lebih.** Setiap indeks tambahan memperlambat penyimpanan nota dan membesarkan berkas database. Yang ada hanya yang benar-benar terpakai:
+
+- urutan tanggal, untuk daftar di beranda
+- gabungan status bayar + tanggal + nilai, untuk saringan dan kartu hutang sekaligus
+- penghubung item ke notanya
+
+**Berapa besar databasenya nanti.** Sekitar 258 byte per nota lengkap dengan itemnya:
+
+| Lama dipakai | Jumlah nota | Ukuran |
+|---|---|---|
+| 1 tahun | 12.000 | 3 MB |
+| 5 tahun | 60.000 | 15 MB |
+| 10 tahun | 120.000 | 30 MB |
+
+Perhitungan dengan asumsi seribu nota per bulan.
+
+---
+
+## 12. Kalau Ada Yang Gagal
+
+### Saat menyiapkan perkakas
+
+**`'flutter' is not recognized`**
+Path belum aktif, atau Anda memakai CMD Administrator. Tutup semua CMD, buka yang biasa (tanpa "Run as administrator"), coba lagi. Kalau masih, ulangi langkah 7 dan 8 di bagian [Pasang perkakas](#3-pasang-perkakas-dari-nol).
+
+**`Unable to locate Android SDK`**
+Setup wizard Android Studio belum selesai. Buka Android Studio, biarkan wizard-nya tuntas sampai muncul "Finishing setup".
+
+**`Unsupported class file major version 65`**
+Java yang terpakai versi 21, bukan 17. Jalankan `flutter config --jdk-dir D:\Aplikasi\jdk17`.
+
+**`Waiting for another flutter command to release the startup lock`**
+Ada proses `dart.exe` yang tersangkut. Buka Task Manager, akhiri semua `dart.exe`, lalu hapus berkas `D:\Aplikasi\flutter\bin\cache\lockfile`.
+
+**Unduhan sistem image gagal dengan `404`**
+Anda memilih versi Preview, beta, DEV, atau CANARY. Pilih **API 34** yang stabil.
+
+### Saat menjalankan
+
+**`No Windows desktop project configured`**
+Android Studio atau VS Code memilih Windows, bukan emulator. Ganti perangkat tujuan di pojok kanan atas.
+
+**`No supported devices connected`**
+Emulator belum menyala atau sudah mati. Jalankan `jalankan.bat`, tunggu sampai layar Home Android muncul.
+
+**Emulator tidak ada di daftar**
+Buat dulu lewat Android Studio → **Tools** → **Device Manager** → **Create Virtual Device**.
+
+**`jalankan.bat` bilang Android SDK tidak ketemu**
+Script sudah menyisir seluruh `D:\Aplikasi`. Kalau tetap gagal, ia akan meminta Anda menempel lokasinya langsung di jendela itu — salin dari Android Studio → **Settings** → **Languages & Frameworks** → **Android SDK**, lihat kotak *Android SDK Location*.
+
+### Saat mengunggah ke GitHub
+
+**`pubspec.yaml tidak ada`**
+Script dijalankan dari folder yang salah. Klik dua kali berkasnya dari dalam folder proyek.
+
+**`repository not found`**
+URL salah ketik, atau repo belum dibuat di GitHub.
+
+**`authentication failed`**
+Login GitHub dibatalkan. Jalankan script lagi dan selesaikan proses login sampai tuntas.
+
+**Tab Actions kosong**
+Folder `.github` tidak ikut terunggah. Seharusnya tidak terjadi karena script yang memasangnya; kalau tetap terjadi beri tahu saya.
+
+### Saat build di GitHub Actions
+
+**Gagal dengan `403 Forbidden`**
+Repositori Maven menolak permintaan dari runner. Sudah ditangani lewat mirror Google di `ci/build.yml.txt`, dan build diulang otomatis sampai tiga kali. Kalau masih gagal, jalankan ulang workflow-nya dari tab Actions.
+
+**Gagal dengan `Duplicate class kotlin.*`**
+Dua plugin menarik versi Kotlin yang berbeda. Sudah ditangani di `android_overrides/namespace_patch.gradle`.
+
+**Gagal dengan `already evaluated`**
+`build.yml` versi lama masih terpakai. Pastikan `ci\build.yml.txt` ada di folder proyek sebelum menjalankan script.
+
+**Gagal lainnya**
+Salin pesan errornya dari tab Actions dan kirim ke saya.
+
+### Saat mencetak
+
+**Printer tidak muncul di daftar**
+Pasangkan dulu lewat Setelan Bluetooth HP. Aplikasi hanya membaca perangkat yang sudah terpasang, tidak memindai sendiri.
+
+**Layar printer berputar terus**
+Semua panggilan Bluetooth sudah dibatasi waktunya, jadi seharusnya selalu berhenti dengan pesan. Kalau tetap berputar, APK yang terpasang masih versi lama — copot dan pasang ulang.
+
+**Cetak gagal di tengah**
+Muncul dialog berisi rincian tiap langkah. Foto dialog itu dan kirim ke saya; penyebabnya pasti ada di salah satu barisnya.
+
+**Baris melipat**
+Lihat bagian [Kalau baris melipat di printer](#8-kalau-baris-melipat-di-printer).
+
+---
+
+## Catatan Teknis
+
+Flutter dikunci di versi **3.22.3** supaya hasil build di laptop dan di GitHub Actions selalu sama.
+
+Aplikasi **tidak meminta izin INTERNET**. Tanpa izin itu, Android sendiri yang memblokir segala koneksi keluar, jadi data Anda dijamin tidak ke mana-mana. Yang diminta hanya Bluetooth, dan itu pun baru saat Anda menekan tombol yang membutuhkannya.

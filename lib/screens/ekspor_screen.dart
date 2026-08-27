@@ -58,21 +58,19 @@ class _EksporScreenState extends State<EksporScreen> {
     if (!mounted) return;
     setState(() => _memuat = true);
 
-    final semua = await DB.instance.notaDaftar(limit: 5000);
-    final awal = _batasAwal;
-    final tersaring = awal == null
-        ? semua
-        : semua
-            .where((n) => n.dibuatMs >= awal.millisecondsSinceEpoch)
-            .toList();
+    // Rentang tanggal disaring oleh SQLite, bukan dengan menarik 5000
+    // nota lalu membuang sebagian besarnya di sini.
+    final ringkas = await DB.instance.notaDaftar(
+      sejakMs: _batasAwal?.millisecondsSinceEpoch,
+      limit: 5000,
+    );
 
     // Itemnya diambil sekaligus dalam dua query; satu query per nota
     // membuat layar membeku saat notanya ribuan.
-    final ids = [
-      for (final n in tersaring)
+    final lengkap = await DB.instance.notaLengkap([
+      for (final n in ringkas)
         if (n.id != null) n.id!,
-    ];
-    final lengkap = await DB.instance.notaLengkap(ids);
+    ]);
 
     if (!mounted) return;
     setState(() {

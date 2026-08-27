@@ -2,6 +2,7 @@ import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
 import '../models/models.dart';
+import '../store/settings.dart';
 
 // Seluruh data ada di SQLite lokal pada HP. Tidak ada server maupun login.
 class DB {
@@ -20,8 +21,15 @@ class DB {
     final path = p.join(dir, 'laundry.db');
     return openDatabase(
       path,
-      version: 4,
-      onConfigure: (d) => d.execute('PRAGMA foreign_keys = ON'),
+      version: 6,
+      onConfigure: (d) async {
+        await d.execute('PRAGMA foreign_keys = ON');
+        // WAL: tulis jauh lebih cepat dan baca tidak terhalang tulis.
+        await d.execute('PRAGMA journal_mode = WAL');
+        // NORMAL, bukan FULL: cukup aman dengan WAL dan jauh lebih ringan
+        // untuk kartu memori HP murah yang lambat menulis.
+        await d.execute('PRAGMA synchronous = NORMAL');
+      },
       onUpgrade: (d, lama, baru) async {
         if (lama < 2) {
           await d.execute(
@@ -32,6 +40,26 @@ class DB {
         }
         if (lama < 4) {
           await d.execute('ALTER TABLE orders ADD COLUMN print_count INTEGER');
+        }
+        if (lama < 5) {
+          // Kolom status pesanan dibuang. SQLite lama tidak punya DROP
+          // COLUMN, jadi tabelnya disusun ulang. Nota lama ikut terbawa.
+          await d.execute('ALTER TABLE orders RENAME TO orders_lama');
+          await _buatTabelNota(d);
+          await d.execute('''
+            INSERT INTO orders(id, code, customer, created_at, due_at, paid,
+                               paid_at, cash, note, total, print_count, extras)
+            SELECT id, code, customer, created_at, due_at, paid,
+                   paid_at, cash, note, total, print_count, extras
+            FROM orders_lama
+          ''');
+          await d.execute('DROP TABLE orders_lama');
+          await _buatIndeks(d);
+        }
+        if (lama < 6) {
+          // Indeks belum-lunas disusun ulang agar mencakup kolom total,
+          // supaya kartu hutang di beranda tidak perlu membuka tabel.
+          await _buatIndeks(d);
         }
       },
       onCreate: (d, v) async {
@@ -44,23 +72,7 @@ class DB {
             active INTEGER NOT NULL DEFAULT 1
           )
         ''');
-        await d.execute('''
-          CREATE TABLE orders(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            code TEXT NOT NULL UNIQUE,
-            customer TEXT NOT NULL,
-            created_at INTEGER NOT NULL,
-            due_at INTEGER,
-            status INTEGER NOT NULL DEFAULT 0,
-            paid INTEGER NOT NULL DEFAULT 0,
-            paid_at INTEGER,
-            cash INTEGER,
-            note TEXT NOT NULL DEFAULT '',
-            total INTEGER NOT NULL DEFAULT 0,
-            print_count INTEGER,
-            extras TEXT NOT NULL DEFAULT '{}'
-          )
-        ''');
+        await _buatTabelNota(d);
         await d.execute('''
           CREATE TABLE order_items(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -73,16 +85,53 @@ class DB {
             FOREIGN KEY(order_id) REFERENCES orders(id) ON DELETE CASCADE
           )
         ''');
-        await d.execute(
-            'CREATE INDEX idx_orders_created ON orders(created_at DESC)');
-        await d.execute(
-            'CREATE INDEX idx_items_order ON order_items(order_id)');
+        await _buatIndeks(d);
 
         for (final l in _layananContoh()) {
           await d.insert('services', l.toMap());
         }
       },
     );
+  }
+
+  static Future<void> _buatTabelNota(Database d) => d.execute('''
+        CREATE TABLE orders(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          code TEXT NOT NULL UNIQUE,
+          customer TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          due_at INTEGER,
+          paid INTEGER NOT NULL DEFAULT 0,
+          paid_at INTEGER,
+          cash INTEGER,
+          note TEXT NOT NULL DEFAULT '',
+          total INTEGER NOT NULL DEFAULT 0,
+          print_count INTEGER,
+          extras TEXT NOT NULL DEFAULT '{}'
+        )
+      ''');
+
+  // Indeks yang benar-benar terpakai, tidak lebih. Tiap indeks tambahan
+  // memperlambat penyimpanan nota dan membesarkan berkas database.
+  //
+  // Dibuang dulu sebelum dibuat: IF NOT EXISTS hanya melihat namanya, jadi
+  // tanpa ini database lama akan tetap memakai bentuk indeks yang usang.
+  static Future<void> _buatIndeks(Database d) async {
+    await d.execute('DROP INDEX IF EXISTS idx_orders_paid');
+
+    // Daftar nota di beranda, urut terbaru.
+    await d.execute(
+        'CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at DESC)');
+    // Saringan "belum lunas" sekaligus kartu hutang di beranda.
+    //
+    // Kolom total ikut dimasukkan meski tidak disaring maupun diurut:
+    // dengan begitu penjumlahan hutang selesai di dalam indeks saja, tanpa
+    // membuka tabel baris demi baris. Pada 200.000 nota, itu memangkas
+    // waktunya dari ~18 ms jadi ~3 ms.
+    await d.execute('CREATE INDEX IF NOT EXISTS idx_orders_paid '
+        'ON orders(paid, created_at DESC, total)');
+    await d.execute(
+        'CREATE INDEX IF NOT EXISTS idx_items_order ON order_items(order_id)');
   }
 
   Future<List<Layanan>> layananSemua({bool hanyaAktif = false}) async {
@@ -119,9 +168,13 @@ class DB {
     final dd = now.day.toString().padLeft(2, '0');
     final awalan = 'LDY-$yy$mm$dd-';
 
+    // Perbandingan rentang, bukan LIKE: hanya bentuk ini yang bisa memakai
+    // indeks UNIQUE pada kolom code. Dengan LIKE, SQLite menyisir seluruh
+    // tabel, dan pada puluhan ribu nota itu terasa jelas di HP lambat.
     final rows = await d.rawQuery(
-      'SELECT code FROM orders WHERE code LIKE ? ORDER BY code DESC LIMIT 1',
-      ['$awalan%'],
+      'SELECT code FROM orders WHERE code >= ? AND code < ? '
+      'ORDER BY code DESC LIMIT 1',
+      [awalan, '$awalan\u{10FFFF}'],
     );
 
     var urut = 1;
@@ -136,6 +189,7 @@ class DB {
   Future<int> notaSimpan(Nota n) async {
     final d = await db;
     n.total = n.hitungTotal();
+    _ringkasanUsang();
     return d.transaction<int>((txn) async {
       int id;
       if (n.id == null) {
@@ -157,6 +211,7 @@ class DB {
 
   Future<void> notaHapus(int id) async {
     final d = await db;
+    _ringkasanUsang();
     // Dihapus manual, tidak menggantungkan diri pada ON DELETE CASCADE
     // yang baru aktif kalau PRAGMA foreign_keys berhasil dipasang.
     await d.transaction((txn) async {
@@ -165,16 +220,11 @@ class DB {
     });
   }
 
-  Future<void> notaUbahStatus(int id, int status) async {
-    final d = await db;
-    await d.update('orders', {'status': status},
-        where: 'id = ?', whereArgs: [id]);
-  }
-
   // Dipakai saat pelanggan yang tadinya belum bayar melunasi ketika
   // mengambil cucian: cukup baris itu yang dibenarkan.
   Future<void> notaUbahBayar(int id, int statusBayar, {int? uang}) async {
     final d = await db;
+    _ringkasanUsang();
     await d.update(
       'orders',
       {
@@ -202,20 +252,26 @@ class DB {
   }
 
   Future<List<Nota>> notaDaftar({
-    int? status,
     bool belumLunas = false,
     String cari = '',
+    int? sejakMs,
     int limit = 300,
   }) async {
     final d = await db;
     final where = <String>[];
     final args = <Object?>[];
 
-    if (status != null) {
-      where.add('status = ?');
-      args.add(status);
+    if (belumLunas) {
+      where.add('paid = ?');
+      args.add(StatusBayar.belum);
     }
-    if (belumLunas) where.add('paid = 0');
+
+    // Disaring di SQLite, bukan di Dart: menarik ribuan baris lalu
+    // membuang sebagian besarnya membebani memori tanpa guna.
+    if (sejakMs != null) {
+      where.add('created_at >= ?');
+      args.add(sejakMs);
+    }
 
     final kata = cari.trim();
     if (kata.isNotEmpty) {
@@ -247,32 +303,72 @@ class DB {
 
   // Ambil beberapa nota lengkap dengan itemnya sekaligus. Dipakai layar
   // ekspor, menggantikan satu query per nota yang membekukan layar.
+  // Android membatasi jumlah parameter satu query di 999. Karena itu id-nya
+  // dikerjakan per potongan; tanpa ini ekspor ribuan nota gagal total
+  // dengan pesan "too many SQL variables".
+  static const _maksParameter = 500;
+
   Future<List<Nota>> notaLengkap(List<int> ids) async {
     if (ids.isEmpty) return [];
     final d = await db;
-    final tanya = List.filled(ids.length, '?').join(',');
 
-    final rows = await d.query('orders',
-        where: 'id IN ($tanya)', whereArgs: ids, orderBy: 'created_at DESC');
-    final notas = rows.map(Nota.fromMap).toList();
-
-    final its = await d.query('order_items',
-        where: 'order_id IN ($tanya)', whereArgs: ids, orderBy: 'id ASC');
-
+    final notas = <Nota>[];
     final perNota = <int, List<ItemNota>>{};
-    for (final r in its) {
-      final it = ItemNota.fromMap(r);
-      final nid = it.notaId;
-      if (nid != null) (perNota[nid] ??= []).add(it);
+
+    for (var i = 0; i < ids.length; i += _maksParameter) {
+      final akhir = (i + _maksParameter).clamp(0, ids.length);
+      final potong = ids.sublist(i, akhir);
+      final tanya = List.filled(potong.length, '?').join(',');
+
+      final rows = await d.query('orders',
+          where: 'id IN ($tanya)', whereArgs: potong);
+      notas.addAll(rows.map(Nota.fromMap));
+
+      final its = await d.query('order_items',
+          where: 'order_id IN ($tanya)', whereArgs: potong, orderBy: 'id ASC');
+      for (final r in its) {
+        final it = ItemNota.fromMap(r);
+        final nid = it.notaId;
+        if (nid != null) (perNota[nid] ??= []).add(it);
+      }
     }
+
     for (final n in notas) {
       n.items = perNota[n.id] ?? [];
     }
+    // Urutan dikembalikan di sini karena tiap potongan diurut sendiri-sendiri.
+    notas.sort((a, b) => b.dibuatMs.compareTo(a.dibuatMs));
     return notas;
   }
 
   // Angka untuk kartu di beranda.
-  Future<Map<String, int>> ringkasanHariIni() async {
+  // Angka kartu hutang di beranda, disimpan di memori.
+  //
+  // Menghitungnya berarti membaca setiap nota yang belum lunas, jadi makin
+  // lama makin berat. Yang disimpan hanya dua bilangan, bukan salinan data.
+  Map<String, int>? _ringkasan;
+
+  // Ditandai usang saat ada nota berubah, bukan langsung dihitung ulang.
+  // Pada mode otomatis, hitungannya menyusul saat beranda dimuat; pada mode
+  // manual, menunggu tombol perbarui ditekan.
+  bool _ringkasanUsangFlag = false;
+
+  bool get ringkasanPerluDiperbarui => _ringkasanUsangFlag;
+
+  void _ringkasanUsang() => _ringkasanUsangFlag = true;
+
+  // [paksa] dipakai tombol perbarui di beranda: hitung sekarang juga,
+  // apa pun setelannya.
+  Future<Map<String, int>> ringkasanHariIni({bool paksa = false}) async {
+    final tersimpan = _ringkasan;
+
+    if (tersimpan != null && !paksa) {
+      // Sudah ada angkanya. Hitung ulang hanya kalau memang sudah usang
+      // DAN pengguna memilih mode otomatis.
+      final otomatis = Settings.instance.hutangOtomatis;
+      if (!_ringkasanUsangFlag || !otomatis) return tersimpan;
+    }
+
     final d = await db;
 
     // Nota bersaldo (total negatif) bukan hutang, jadi tidak boleh ikut
@@ -283,26 +379,23 @@ class DB {
       'FROM orders WHERE paid = ?',
       [StatusBayar.belum],
     );
-    final proses = await d.rawQuery(
-      'SELECT COUNT(*) c FROM orders WHERE status < ?',
-      [StatusPesanan.diambil],
-    );
 
-    int ambil(List<Map<String, Object?>> r, String k) {
-      if (r.isEmpty) return 0;
-      final v = r.first[k];
+    int ambil(String k) {
+      if (hutang.isEmpty) return 0;
+      final v = hutang.first[k];
       return v is num ? v.toInt() : 0;
     }
 
-    return {
-      'belumLunasJml': ambil(hutang, 'c'),
-      'belumLunasNilai': ambil(hutang, 't'),
-      'belumDiambil': ambil(proses, 'c'),
+    _ringkasanUsangFlag = false;
+    return _ringkasan = {
+      'belumLunasJml': ambil('c'),
+      'belumLunasNilai': ambil('t'),
     };
   }
 
   Future<void> kosongkanTransaksi() async {
     final d = await db;
+    _ringkasanUsang();
     await d.transaction((txn) async {
       await txn.delete('order_items');
       await txn.delete('orders');
@@ -337,7 +430,6 @@ Nota notaContoh() {
     pelanggan: 'Budi Santoso',
     dibuatMs: now.millisecondsSinceEpoch,
     estimasiMs: now.add(const Duration(days: 2)).millisecondsSinceEpoch,
-    status: StatusPesanan.diproses,
     statusBayar: StatusBayar.belum,
     uangDibayar: 50000,
     catatan: 'Lorem ipsum dolor sit amet.',

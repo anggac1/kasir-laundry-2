@@ -6,7 +6,7 @@ import '../print/printer_service.dart';
 import '../store/settings.dart';
 import '../ui/umum.dart';
 import '../utils/fmt.dart';
-import 'beranda.dart' show LencanaBayar, LencanaStatus;
+import 'beranda.dart' show LencanaBayar;
 import 'nota_baru.dart';
 import 'pratinjau.dart';
 
@@ -38,11 +38,6 @@ class _NotaDetailScreenState extends State<NotaDetailScreen> {
     });
   }
 
-
-  Future<void> _ubahStatus(int status) async {
-    await DB.instance.notaUbahStatus(widget.notaId, status);
-    await _muat();
-  }
 
   // Membenarkan baris pembayaran satu nota saja, tanpa mengubah apa pun yang
   // lain. Dipakai saat pelanggan melunasi ketika mengambil cucian.
@@ -176,29 +171,8 @@ class _NotaDetailScreenState extends State<NotaDetailScreen> {
                             ],
                           ),
                         ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            LencanaStatus(status: n.status),
-                            const SizedBox(height: 4),
-                            LencanaBayar(statusBayar: n.statusBayar),
-                          ],
-                        ),
+                        LencanaBayar(statusBayar: n.statusBayar),
                       ],
-                    ),
-                    const SizedBox(height: 20),
-                    const Text('Status Pesanan',
-                        style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 6,
-                      children: StatusPesanan.semua
-                          .map((s) => ChoiceChip(
-                                label: Text(StatusPesanan.label(s)),
-                                selected: n.status == s,
-                                onSelected: (_) => _ubahStatus(s),
-                              ))
-                          .toList(),
                     ),
                     const SizedBox(height: 20),
                     const Text('Pembayaran',

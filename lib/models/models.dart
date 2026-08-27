@@ -48,23 +48,6 @@ class Satuan {
       unit.trim().isEmpty ? qty : '$qty ${unit.trim()}';
 }
 
-class StatusPesanan {
-  static const diterima = 0;
-  static const diproses = 1;
-  static const selesai = 2;
-  static const diambil = 3;
-
-  static const semua = [diterima, diproses, selesai, diambil];
-
-  static String label(int s) => switch (s) {
-        diterima => 'Diterima',
-        diproses => 'Diproses',
-        selesai => 'Selesai',
-        diambil => 'Diambil',
-        _ => '-',
-      };
-}
-
 // sembunyi dipakai bila baris pembayaran tidak perlu dicetak sama sekali,
 // supaya pengguna tidak dipaksa memilih dan kertas tidak terbuang.
 class StatusBayar {
@@ -180,7 +163,6 @@ class Nota {
   String pelanggan;
   int dibuatMs;
   int? estimasiMs;
-  int status;
   int statusBayar;
   int? dibayarMs;
 
@@ -204,7 +186,6 @@ class Nota {
     required this.pelanggan,
     required this.dibuatMs,
     this.estimasiMs,
-    this.status = StatusPesanan.diterima,
     this.statusBayar = StatusBayar.belum,
     this.dibayarMs,
     this.uangDibayar,
@@ -244,7 +225,6 @@ class Nota {
         'customer': pelanggan,
         'created_at': dibuatMs,
         'due_at': estimasiMs,
-        'status': status,
         'paid': statusBayar,
         'paid_at': dibayarMs,
         'cash': uangDibayar,
@@ -260,7 +240,6 @@ class Nota {
         pelanggan: _str(m['customer']),
         dibuatMs: _int(m['created_at']),
         estimasiMs: _intOpsional(m['due_at']),
-        status: _int(m['status']),
         statusBayar: _int(m['paid']),
         dibayarMs: _intOpsional(m['paid_at']),
         uangDibayar: _intOpsional(m['cash']),

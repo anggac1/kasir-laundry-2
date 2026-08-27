@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 
 import '../db/db.dart';
 import '../models/models.dart';
+import '../store/settings.dart';
 import '../utils/fmt.dart';
 import 'layanan.dart';
 import 'nota_baru.dart';
 import 'nota_detail.dart';
+import 'panduan.dart';
 import 'pengaturan.dart';
 import 'template_editor.dart';
 
@@ -26,8 +28,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
   Map<String, int> _ringkasan = {};
   bool _memuat = true;
 
-  // null = semua status, -1 = khusus "belum lunas"
-  int? _filter;
+  bool _hanyaHutang = false;
 
   @override
   void initState() {
@@ -50,20 +51,19 @@ class _BerandaScreenState extends State<BerandaScreen> {
     _jedaCari = Timer(const Duration(milliseconds: 300), _muat);
   }
 
-  Future<void> _muat() async {
+  Future<void> _muat({bool paksaRingkasan = false}) async {
     if (!mounted) return;
     setState(() => _memuat = true);
-    final belumLunas = _filter == -1;
-    final data = await DB.instance.notaDaftar(
-      status: (_filter == null || _filter == -1) ? null : _filter,
-      belumLunas: belumLunas,
-      cari: _cariCtrl.text,
-    );
-    final r = await DB.instance.ringkasanHariIni();
+    // Dijalankan bersamaan, bukan bergantian: keduanya tidak saling
+    // membutuhkan, jadi menunggunya satu per satu hanya menunda tampilan.
+    final hasil = await Future.wait([
+      DB.instance.notaDaftar(belumLunas: _hanyaHutang, cari: _cariCtrl.text),
+      DB.instance.ringkasanHariIni(paksa: paksaRingkasan),
+    ]);
     if (!mounted) return;
     setState(() {
-      _notas = data;
-      _ringkasan = r;
+      _notas = hasil[0] as List<Nota>;
+      _ringkasan = hasil[1] as Map<String, int>;
       _memuat = false;
     });
   }
@@ -79,6 +79,18 @@ class _BerandaScreenState extends State<BerandaScreen> {
       appBar: AppBar(
         title: const Text('Kasir Laundry'),
         actions: [
+          // Hanya muncul pada mode manual. Titik menandakan angkanya sudah
+          // berubah sejak terakhir dihitung.
+          if (!Settings.instance.hutangOtomatis)
+            IconButton(
+              tooltip: 'Perbarui angka hutang',
+              onPressed: _memuat ? null : () => _muat(paksaRingkasan: true),
+              icon: Badge(
+                isLabelVisible: DB.instance.ringkasanPerluDiperbarui,
+                smallSize: 8,
+                child: const Icon(Icons.refresh),
+              ),
+            ),
           PopupMenuButton<String>(
             onSelected: (v) {
               switch (v) {
@@ -90,6 +102,9 @@ class _BerandaScreenState extends State<BerandaScreen> {
                   break;
                 case 'pengaturan':
                   _buka(const PengaturanScreen());
+                  break;
+                case 'panduan':
+                  _buka(const PanduanScreen());
                   break;
               }
             },
@@ -115,6 +130,14 @@ class _BerandaScreenState extends State<BerandaScreen> {
                 child: ListTile(
                   leading: Icon(Icons.settings_outlined),
                   title: Text('Pengaturan'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              PopupMenuItem(
+                value: 'panduan',
+                child: ListTile(
+                  leading: Icon(Icons.help_outline),
+                  title: Text('Panduan'),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
@@ -191,30 +214,12 @@ class _BerandaScreenState extends State<BerandaScreen> {
           const SizedBox(width: 8),
           kotak('Nota berhutang', '${_ringkasan['belumLunasJml'] ?? 0} nota',
               Icons.error_outline, Colors.orange.shade800),
-          const SizedBox(width: 8),
-          kotak('Belum diambil', '${_ringkasan['belumDiambil'] ?? 0} nota',
-              Icons.inventory_2_outlined, Colors.blue.shade700),
         ],
       ),
     );
   }
 
   Widget _barisFilter() {
-    Widget chip(String label, int? nilai) {
-      final aktif = _filter == nilai;
-      return Padding(
-        padding: const EdgeInsets.only(right: 6),
-        child: FilterChip(
-          label: Text(label),
-          selected: aktif,
-          onSelected: (_) {
-            setState(() => _filter = aktif ? null : nilai);
-            _muat();
-          },
-        ),
-      );
-    }
-
     return Column(
       children: [
         Padding(
@@ -238,19 +243,18 @@ class _BerandaScreenState extends State<BerandaScreen> {
             ),
           ),
         ),
-        SizedBox(
-          height: 44,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            children: [
-              chip('Semua', null),
-              chip('Diterima', StatusPesanan.diterima),
-              chip('Diproses', StatusPesanan.diproses),
-              chip('Selesai', StatusPesanan.selesai),
-              chip('Diambil', StatusPesanan.diambil),
-              chip('Belum Lunas', -1),
-            ],
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+            child: FilterChip(
+              label: const Text('Belum lunas'),
+              selected: _hanyaHutang,
+              onSelected: (v) {
+                setState(() => _hanyaHutang = v);
+                _muat();
+              },
+            ),
           ),
         ),
       ],
@@ -294,39 +298,11 @@ class _BerandaScreenState extends State<BerandaScreen> {
                 style: TextStyle(
                     fontSize: 10, color: Colors.green.shade700)),
           const SizedBox(height: 4),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              LencanaStatus(status: n.status),
-              const SizedBox(width: 4),
-              LencanaBayar(statusBayar: n.statusBayar),
-            ],
-          ),
+          LencanaBayar(statusBayar: n.statusBayar),
         ],
       ),
       isThreeLine: false,
     );
-  }
-}
-
-// Lencana kecil untuk status pesanan.
-class LencanaStatus extends StatelessWidget {
-  final int status;
-  const LencanaStatus({super.key, required this.status});
-
-  @override
-  Widget build(BuildContext context) {
-    Color warna;
-    if (status == StatusPesanan.diterima) {
-      warna = Colors.grey.shade700;
-    } else if (status == StatusPesanan.diproses) {
-      warna = Colors.blue.shade700;
-    } else if (status == StatusPesanan.selesai) {
-      warna = Colors.teal.shade700;
-    } else {
-      warna = Colors.green.shade700;
-    }
-    return _pil(StatusPesanan.label(status), warna);
   }
 }
 

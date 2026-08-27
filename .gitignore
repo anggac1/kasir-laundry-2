@@ -1,5 +1,18 @@
-# Folder yang dibuat otomatis oleh Flutter saat build.
-# Tidak perlu ikut disimpan di GitHub.
+# Repo di GitHub hanya perlu berisi yang dibutuhkan untuk build APK.
+# Sisanya alat bantu di laptop, tidak ada gunanya diunggah.
+
+# Script pembantu, hanya dipakai di Windows
+*.bat
+
+# Tampungan berkas yang menunggu dihapus manual
+_to_delete/
+
+# Semua panduan digabung di README.md, dan README ikut diunggah
+# karena itu satu-satunya dokumentasi.
+*.md
+!README.md
+
+# Dibuat otomatis oleh Flutter saat build
 .dart_tool/
 .packages
 .flutter-plugins
@@ -7,7 +20,7 @@
 build/
 pubspec.lock
 
-# Kerangka Android dibuat ulang otomatis oleh GitHub Actions.
+# Kerangka platform dibuat ulang otomatis oleh GitHub Actions
 android/
 ios/
 web/
@@ -24,6 +37,3 @@ test/
 # Sistem
 .DS_Store
 Thumbs.db
-
-# Folder tampungan berkas yang mau dihapus manual
-_to_delete/

@@ -112,10 +112,8 @@ class _NotaBaruScreenState extends State<NotaBaruScreen> {
       pelanggan: untukSimpan
           ? nama
           : (nama.isEmpty ? '(nama belum diisi)' : nama),
-      // Timestamp diambil dari jam perangkat.
       dibuatMs: lama?.dibuatMs ?? now.millisecondsSinceEpoch,
       estimasiMs: _pakaiEstimasi ? _estimasi?.millisecondsSinceEpoch : null,
-      status: lama?.status ?? StatusPesanan.diterima,
       statusBayar: _statusBayar,
       dibayarMs: _statusBayar == StatusBayar.lunas
           ? (lama?.dibayarMs ?? now.millisecondsSinceEpoch)

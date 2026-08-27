@@ -18,7 +18,6 @@ Nama     : {nama_pelanggan}
 [B]{label_total}[>]{total}
 [?uang]Tunai[>]{uang}
 [?kembalian]Kembali[>]{kembalian}
-Status   : {status_pesanan}
 [?status_bayar]Bayar    : {status_bayar}
 ---
 Catatan:
@@ -149,6 +148,15 @@ class Settings {
   // false = nota dicetak di akhir saat diambil, estimasi tidak dipakai.
   bool get pakaiEstimasi => _p.getBool('use_due_date') ?? true;
   Future<void> setPakaiEstimasi(bool v) => _p.setBool('use_due_date', v);
+
+  // Kartu hutang di beranda: hitung ulang sendiri, atau tunggu ditekan.
+  //
+  // Menghitungnya berarti membaca setiap nota yang belum lunas, jadi makin
+  // lama makin berat. Selama notanya masih sedikit itu tidak terasa, maka
+  // bawaannya otomatis. Kalau sudah menumpuk, matikan lewat Pengaturan dan
+  // perbarui sendiri lewat tombol di beranda saat memang perlu.
+  bool get hutangOtomatis => _p.getBool('debt_auto') ?? true;
+  Future<void> setHutangOtomatis(bool v) => _p.setBool('debt_auto', v);
 
   // Kembalikan seluruh setelan printer ke bawaan, yang memang sudah
   // cocok untuk RPP02N: 58mm, tanpa pisau, Font A.

@@ -5,7 +5,6 @@ import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 
 import '../models/models.dart';
 import '../store/settings.dart';
-import '../utils/fmt.dart';
 import 'escpos.dart';
 import 'receipt.dart';
 
@@ -36,27 +35,6 @@ class DiagnosaPrinter {
   });
 }
 
-// Catatan percetakan terakhir, dipakai layar Debug.
-class JejakCetak {
-  final String waktu;
-  final String kodeNota;
-  final int jumlahSalinan;
-  final String teksStruk;
-  final List<int> bytes;
-  final String hasil;
-  final List<String> langkah;
-
-  const JejakCetak({
-    required this.waktu,
-    required this.kodeNota,
-    required this.jumlahSalinan,
-    required this.teksStruk,
-    required this.bytes,
-    required this.hasil,
-    this.langkah = const [],
-  });
-}
-
 // Printer thermal Bluetooth Classic (SPP), disetel untuk printer 58mm
 // murah seperti RPP02N yang punya dua kebiasaan merepotkan: menolak
 // kiriman besar sekaligus, dan melaporkan masih tersambung padahal
@@ -80,8 +58,6 @@ class PrinterService {
   // Batas keseluruhan pengiriman, supaya struk panjang di printer yang
   // lambat tidak menahan layar tanpa ujung.
   static const _batasTotalKirim = Duration(seconds: 45);
-
-  JejakCetak? jejakTerakhir;
 
   // Bungkus semua panggilan plugin: apa pun yang terjadi, selesai.
   Future<T> _aman<T>(
@@ -312,11 +288,6 @@ class PrinterService {
     return semua;
   }
 
-  String susunTeks(Nota nota, {int? paksaSalinan}) => Struk.pratinjau(
-        susunBaris(nota, paksaSalinan: paksaSalinan),
-        Settings.instance.lebarKertas,
-      );
-
   List<int> susunBytes(Nota nota, {int? paksaSalinan}) {
     final s = Settings.instance;
     final cfg = StrukConfig.dari(s);
@@ -336,20 +307,6 @@ class PrinterService {
     return semua;
   }
 
-  Future<HasilCetak> cetakNota(Nota nota, {int? paksaSalinan}) async {
-    final jumlah = jumlahSalinan(nota, paksaSalinan);
-    final bytes = susunBytes(nota, paksaSalinan: jumlah);
-    final hasil = await kirim(bytes);
-
-    jejakTerakhir = JejakCetak(
-      waktu: jamDetik(DateTime.now()),
-      kodeNota: nota.kode,
-      jumlahSalinan: jumlah,
-      teksStruk: susunTeks(nota, paksaSalinan: jumlah),
-      bytes: bytes,
-      hasil: hasil.pesan,
-      langkah: hasil.langkah,
-    );
-    return hasil;
-  }
+  Future<HasilCetak> cetakNota(Nota nota, {int? paksaSalinan}) =>
+      kirim(susunBytes(nota, paksaSalinan: paksaSalinan));
 }
