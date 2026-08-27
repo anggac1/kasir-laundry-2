@@ -22,14 +22,20 @@ class DB {
     return openDatabase(
       path,
       version: 7,
-      onConfigure: (d) async {
-        await d.execute('PRAGMA foreign_keys = ON');
-        // WAL: tulis jauh lebih cepat dan baca tidak terhalang tulis.
-        await d.execute('PRAGMA journal_mode = WAL');
-        // NORMAL, bukan FULL: cukup aman dengan WAL dan jauh lebih ringan
-        // untuk kartu memori HP murah yang lambat menulis.
-        await d.execute('PRAGMA synchronous = NORMAL');
-      },
+      // Foreign key sengaja DIMATIKAN di sini, bukan dinyalakan.
+      //
+      // onConfigure berjalan sebelum onCreate/onUpgrade dan di luar
+      // transaksi. Itu satu-satunya tempat PRAGMA ini berpengaruh, karena
+      // di dalam transaksi SQLite mengabaikannya tanpa pesan apa pun --
+      // dan sqflite menjalankan onUpgrade di dalam transaksi.
+      //
+      // Migrasi v5 menyusun ulang tabel orders. Kalau foreign key aktif,
+      // DROP tabel lama memicu ON DELETE CASCADE dan menghapus seluruh
+      // item nota. Karena itu harus mati selama migrasi.
+      onConfigure: (d) => d.execute('PRAGMA foreign_keys = OFF'),
+
+      // Dinyalakan lagi setelah semua migrasi selesai.
+      onOpen: (d) => d.execute('PRAGMA foreign_keys = ON'),
       onUpgrade: (d, lama, baru) async {
         if (lama < 2) {
           await d.execute(
@@ -43,40 +49,32 @@ class DB {
         }
         if (lama < 5) {
           // Kolom status pesanan dibuang. SQLite lama tidak punya DROP
-          // COLUMN, jadi tabelnya disusun ulang.
+          // COLUMN, jadi kedua tabel disusun ulang.
           //
-          // Foreign key WAJIB dimatikan selama proses ini. Android memakai
-          // legacy_alter_table, sehingga RENAME ikut mengubah acuan foreign
-          // key di order_items menjadi orders_lama. Tanpa dimatikan, DROP
-          // TABLE orders_lama memicu ON DELETE CASCADE dan MENGHAPUS SELURUH
-          // ITEM NOTA. Salinan tabel seperti ini memang jalur resmi yang
-          // dianjurkan SQLite untuk membuang kolom.
-          await d.execute('PRAGMA foreign_keys = OFF');
-          try {
-            await d.execute('ALTER TABLE orders RENAME TO orders_lama');
-            await _buatTabelNota(d);
-            await d.execute('''
-              INSERT INTO orders(id, code, customer, created_at, due_at, paid,
-                                 paid_at, cash, note, total, print_count, extras)
-              SELECT id, code, customer, created_at, due_at, paid,
-                     paid_at, cash, note, total, print_count, extras
-              FROM orders_lama
-            ''');
-            await d.execute('DROP TABLE orders_lama');
+          // Foreign key sudah dimatikan di onConfigure. Mematikannya di sini
+          // tidak berpengaruh: blok ini berjalan di dalam transaksi, dan di
+          // sana SQLite mengabaikan PRAGMA itu tanpa pesan apa pun.
+          await d.execute('ALTER TABLE orders RENAME TO orders_lama');
+          await _buatTabelNota(d);
+          await d.execute('''
+            INSERT INTO orders(id, code, customer, created_at, due_at, paid,
+                               paid_at, cash, note, total, print_count, extras)
+            SELECT id, code, customer, created_at, due_at, paid,
+                   paid_at, cash, note, total, print_count, extras
+            FROM orders_lama
+          ''');
+          await d.execute('DROP TABLE orders_lama');
 
-            // order_items disusun ulang juga, supaya acuan foreign key-nya
-            // kembali menunjuk ke orders, bukan orders_lama yang sudah tiada.
-            await d.execute('ALTER TABLE order_items RENAME TO items_lama');
-            await _buatTabelItem(d);
-            await d.execute('''
-              INSERT INTO order_items(id, order_id, name, unit, qty, price, subtotal)
-              SELECT id, order_id, name, unit, qty, price, subtotal
-              FROM items_lama
-            ''');
-            await d.execute('DROP TABLE items_lama');
-          } finally {
-            await d.execute('PRAGMA foreign_keys = ON');
-          }
+          // order_items ikut disusun ulang supaya acuan foreign key-nya
+          // menunjuk ke orders lagi, bukan orders_lama yang sudah tiada.
+          await d.execute('ALTER TABLE order_items RENAME TO items_lama');
+          await _buatTabelItem(d);
+          await d.execute('''
+            INSERT INTO order_items(id, order_id, name, unit, qty, price, subtotal)
+            SELECT id, order_id, name, unit, qty, price, subtotal
+            FROM items_lama
+          ''');
+          await d.execute('DROP TABLE items_lama');
           await _buatIndeks(d);
         }
         if (lama < 6) {
@@ -145,21 +143,16 @@ class DB {
     final skema = baris.first['sql']?.toString() ?? '';
     if (!skema.contains('orders_lama')) return;
 
-    await d.execute('PRAGMA foreign_keys = OFF');
-    try {
-      await d.execute('ALTER TABLE order_items RENAME TO items_rusak');
-      await _buatTabelItem(d);
-      // Baris yatim ikut dibuang: notanya memang sudah tidak ada.
-      await d.execute('''
-        INSERT INTO order_items(id, order_id, name, unit, qty, price, subtotal)
-        SELECT i.id, i.order_id, i.name, i.unit, i.qty, i.price, i.subtotal
-        FROM items_rusak i
-        WHERE EXISTS (SELECT 1 FROM orders o WHERE o.id = i.order_id)
-      ''');
-      await d.execute('DROP TABLE items_rusak');
-    } finally {
-      await d.execute('PRAGMA foreign_keys = ON');
-    }
+    await d.execute('ALTER TABLE order_items RENAME TO items_rusak');
+    await _buatTabelItem(d);
+    // Baris yatim ikut dibuang: notanya memang sudah tidak ada.
+    await d.execute('''
+      INSERT INTO order_items(id, order_id, name, unit, qty, price, subtotal)
+      SELECT i.id, i.order_id, i.name, i.unit, i.qty, i.price, i.subtotal
+      FROM items_rusak i
+      WHERE EXISTS (SELECT 1 FROM orders o WHERE o.id = i.order_id)
+    ''');
+    await d.execute('DROP TABLE items_rusak');
     await d.execute(
         'CREATE INDEX IF NOT EXISTS idx_items_order ON order_items(order_id)');
   }
