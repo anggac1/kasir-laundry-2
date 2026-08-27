@@ -224,6 +224,27 @@ const _mulai = <_Butir>[
     catatan: 'Pratinjau selalu muncul sebelum mencetak. Biasakan membacanya '
         'sekilas — jauh lebih murah daripada mencetak ulang.',
   ),
+  _Butir(
+    'Yang wajib diisi, dan yang tidak',
+    ikon: Icons.check_circle_outline,
+    isi: 'Sengaja hanya dua hal yang wajib. Sisanya boleh dilewati, dan '
+        'baris yang kosong tidak akan tercetak di struk sehingga kertas '
+        'tidak terbuang.',
+    catatan: 'WAJIB\n'
+        '  Nama pelanggan\n'
+        '  Minimal satu baris item\n\n'
+        'OPSIONAL, kosongkan bila tidak perlu\n'
+        '  Uang diterima — kosong berarti baris Tunai dan Kembali hilang '
+        'dari struk\n'
+        '  Status bayar — pilih Sembunyi agar barisnya tidak tercetak sama '
+        'sekali\n'
+        '  Estimasi selesai — matikan bila nota dicetak saat cucian sudah '
+        'diambil\n'
+        '  Catatan — tercetak sebagai tanda hubung bila dikosongkan\n'
+        '  Jumlah lembar — kosong berarti mengikuti setelan di Pengaturan\n'
+        '  Satuan pada baris manual — boleh dikosongkan untuk hutang atau '
+        'saldo',
+  ),
 ];
 
 const _masalah = <_Butir>[

@@ -27,6 +27,7 @@ class _BerandaScreenState extends State<BerandaScreen> {
   List<Nota> _notas = [];
   Map<String, int> _ringkasan = {};
   bool _memuat = true;
+  String? _galat;
 
   bool _hanyaHutang = false;
 
@@ -51,21 +52,36 @@ class _BerandaScreenState extends State<BerandaScreen> {
     _jedaCari = Timer(const Duration(milliseconds: 300), _muat);
   }
 
+  // Kegagalan apa pun harus tetap menghentikan spinner dan menampilkan
+  // sebabnya. Tanpa penanganan ini, satu galat database membuat layar
+  // berputar selamanya tanpa petunjuk apa yang salah.
   Future<void> _muat({bool paksaRingkasan = false}) async {
     if (!mounted) return;
-    setState(() => _memuat = true);
-    // Dijalankan bersamaan, bukan bergantian: keduanya tidak saling
-    // membutuhkan, jadi menunggunya satu per satu hanya menunda tampilan.
-    final hasil = await Future.wait([
-      DB.instance.notaDaftar(belumLunas: _hanyaHutang, cari: _cariCtrl.text),
-      DB.instance.ringkasanHariIni(paksa: paksaRingkasan),
-    ]);
-    if (!mounted) return;
     setState(() {
-      _notas = hasil[0] as List<Nota>;
-      _ringkasan = hasil[1] as Map<String, int>;
-      _memuat = false;
+      _memuat = true;
+      _galat = null;
     });
+
+    try {
+      // Dijalankan bersamaan, bukan bergantian: keduanya tidak saling
+      // membutuhkan, jadi menunggunya satu per satu hanya menunda tampilan.
+      final hasil = await Future.wait([
+        DB.instance.notaDaftar(belumLunas: _hanyaHutang, cari: _cariCtrl.text),
+        DB.instance.ringkasanHariIni(paksa: paksaRingkasan),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _notas = hasil[0] as List<Nota>;
+        _ringkasan = hasil[1] as Map<String, int>;
+        _memuat = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _galat = e.toString();
+        _memuat = false;
+      });
+    }
   }
 
   Future<void> _buka(Widget layar) async {
@@ -160,19 +176,63 @@ class _BerandaScreenState extends State<BerandaScreen> {
             Expanded(
               child: _memuat
                   ? const Center(child: CircularProgressIndicator())
-                  : _notas.isEmpty
-                      ? _kosong()
-                      : ListView.separated(
-                          padding: const EdgeInsets.only(bottom: 88),
-                          itemCount: _notas.length,
-                          separatorBuilder: (_, __) =>
-                              const Divider(height: 1, indent: 16),
-                          itemBuilder: (_, i) => _baris(_notas[i]),
-                        ),
+                  : _galat != null
+                      ? _tampilGalat()
+                      : _notas.isEmpty
+                          ? _kosong()
+                          : ListView.separated(
+                              padding: const EdgeInsets.only(bottom: 88),
+                              itemCount: _notas.length,
+                              separatorBuilder: (_, __) =>
+                                  const Divider(height: 1, indent: 16),
+                              itemBuilder: (_, i) => _baris(_notas[i]),
+                            ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _tampilGalat() {
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        const SizedBox(height: 40),
+        Icon(Icons.error_outline, size: 56, color: Colors.red.shade400),
+        const SizedBox(height: 16),
+        const Text(
+          'Gagal memuat data',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Tarik layar ke bawah untuk mencoba lagi. Kalau tetap gagal, '
+          'kirimkan pesan di bawah ini.',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 13, color: Colors.grey),
+        ),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.red.shade50,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.red.shade200),
+          ),
+          child: SelectableText(
+            _galat ?? '',
+            style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+          ),
+        ),
+        const SizedBox(height: 16),
+        FilledButton.icon(
+          onPressed: () => _muat(paksaRingkasan: true),
+          icon: const Icon(Icons.refresh),
+          label: const Text('Coba Lagi'),
+        ),
+      ],
     );
   }
 

@@ -21,7 +21,7 @@ class DB {
     final path = p.join(dir, 'laundry.db');
     return openDatabase(
       path,
-      version: 6,
+      version: 7,
       onConfigure: (d) async {
         await d.execute('PRAGMA foreign_keys = ON');
         // WAL: tulis jauh lebih cepat dan baca tidak terhalang tulis.
@@ -43,23 +43,56 @@ class DB {
         }
         if (lama < 5) {
           // Kolom status pesanan dibuang. SQLite lama tidak punya DROP
-          // COLUMN, jadi tabelnya disusun ulang. Nota lama ikut terbawa.
-          await d.execute('ALTER TABLE orders RENAME TO orders_lama');
-          await _buatTabelNota(d);
-          await d.execute('''
-            INSERT INTO orders(id, code, customer, created_at, due_at, paid,
-                               paid_at, cash, note, total, print_count, extras)
-            SELECT id, code, customer, created_at, due_at, paid,
-                   paid_at, cash, note, total, print_count, extras
-            FROM orders_lama
-          ''');
-          await d.execute('DROP TABLE orders_lama');
+          // COLUMN, jadi tabelnya disusun ulang.
+          //
+          // Foreign key WAJIB dimatikan selama proses ini. Android memakai
+          // legacy_alter_table, sehingga RENAME ikut mengubah acuan foreign
+          // key di order_items menjadi orders_lama. Tanpa dimatikan, DROP
+          // TABLE orders_lama memicu ON DELETE CASCADE dan MENGHAPUS SELURUH
+          // ITEM NOTA. Salinan tabel seperti ini memang jalur resmi yang
+          // dianjurkan SQLite untuk membuang kolom.
+          await d.execute('PRAGMA foreign_keys = OFF');
+          try {
+            await d.execute('ALTER TABLE orders RENAME TO orders_lama');
+            await _buatTabelNota(d);
+            await d.execute('''
+              INSERT INTO orders(id, code, customer, created_at, due_at, paid,
+                                 paid_at, cash, note, total, print_count, extras)
+              SELECT id, code, customer, created_at, due_at, paid,
+                     paid_at, cash, note, total, print_count, extras
+              FROM orders_lama
+            ''');
+            await d.execute('DROP TABLE orders_lama');
+
+            // order_items disusun ulang juga, supaya acuan foreign key-nya
+            // kembali menunjuk ke orders, bukan orders_lama yang sudah tiada.
+            await d.execute('ALTER TABLE order_items RENAME TO items_lama');
+            await _buatTabelItem(d);
+            await d.execute('''
+              INSERT INTO order_items(id, order_id, name, unit, qty, price, subtotal)
+              SELECT id, order_id, name, unit, qty, price, subtotal
+              FROM items_lama
+            ''');
+            await d.execute('DROP TABLE items_lama');
+          } finally {
+            await d.execute('PRAGMA foreign_keys = ON');
+          }
           await _buatIndeks(d);
         }
         if (lama < 6) {
           // Indeks belum-lunas disusun ulang agar mencakup kolom total,
           // supaya kartu hutang di beranda tidak perlu membuka tabel.
           await _buatIndeks(d);
+        }
+        if (lama < 7) {
+          // Perbaikan database yang rusak oleh migrasi v5 versi awal.
+          //
+          // Migrasi itu menyusun ulang tabel orders tanpa mematikan foreign
+          // key lebih dulu. Di Android, RENAME ikut mengubah acuan foreign
+          // key di order_items menjadi orders_lama. Akibatnya setiap upaya
+          // menyimpan item nota gagal dengan "no such table: orders_lama",
+          // dan layar yang menunggunya berputar tanpa henti.
+          await _perbaikiAcuanItem(d);
         }
       },
       onCreate: (d, v) async {
@@ -73,18 +106,7 @@ class DB {
           )
         ''');
         await _buatTabelNota(d);
-        await d.execute('''
-          CREATE TABLE order_items(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            order_id INTEGER NOT NULL,
-            name TEXT NOT NULL,
-            unit TEXT NOT NULL,
-            qty REAL NOT NULL,
-            price INTEGER NOT NULL,
-            subtotal INTEGER NOT NULL,
-            FOREIGN KEY(order_id) REFERENCES orders(id) ON DELETE CASCADE
-          )
-        ''');
+        await _buatTabelItem(d);
         await _buatIndeks(d);
 
         for (final l in _layananContoh()) {
@@ -108,6 +130,50 @@ class DB {
           total INTEGER NOT NULL DEFAULT 0,
           print_count INTEGER,
           extras TEXT NOT NULL DEFAULT '{}'
+        )
+      ''');
+
+  // Susun ulang order_items bila acuan foreign key-nya salah menunjuk ke
+  // tabel yang sudah tidak ada. Aman dijalankan pada database yang sehat:
+  // kalau acuannya sudah benar, tidak ada yang dikerjakan.
+  static Future<void> _perbaikiAcuanItem(Database d) async {
+    final baris = await d.rawQuery(
+      "SELECT sql FROM sqlite_master WHERE type='table' AND name='order_items'",
+    );
+    if (baris.isEmpty) return;
+
+    final skema = baris.first['sql']?.toString() ?? '';
+    if (!skema.contains('orders_lama')) return;
+
+    await d.execute('PRAGMA foreign_keys = OFF');
+    try {
+      await d.execute('ALTER TABLE order_items RENAME TO items_rusak');
+      await _buatTabelItem(d);
+      // Baris yatim ikut dibuang: notanya memang sudah tidak ada.
+      await d.execute('''
+        INSERT INTO order_items(id, order_id, name, unit, qty, price, subtotal)
+        SELECT i.id, i.order_id, i.name, i.unit, i.qty, i.price, i.subtotal
+        FROM items_rusak i
+        WHERE EXISTS (SELECT 1 FROM orders o WHERE o.id = i.order_id)
+      ''');
+      await d.execute('DROP TABLE items_rusak');
+    } finally {
+      await d.execute('PRAGMA foreign_keys = ON');
+    }
+    await d.execute(
+        'CREATE INDEX IF NOT EXISTS idx_items_order ON order_items(order_id)');
+  }
+
+  static Future<void> _buatTabelItem(Database d) => d.execute('''
+        CREATE TABLE order_items(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          order_id INTEGER NOT NULL,
+          name TEXT NOT NULL,
+          unit TEXT NOT NULL,
+          qty REAL NOT NULL,
+          price INTEGER NOT NULL,
+          subtotal INTEGER NOT NULL,
+          FOREIGN KEY(order_id) REFERENCES orders(id) ON DELETE CASCADE
         )
       ''');
 
