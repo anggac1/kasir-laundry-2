@@ -22,6 +22,7 @@ Ini satu-satunya panduan. Semua yang perlu Anda tahu ada di berkas ini.
 10. [Struktur kode](#10-struktur-kode)
 11. [Ketahanan jangka panjang](#11-ketahanan-jangka-panjang)
 12. [Kalau ada yang gagal](#12-kalau-ada-yang-gagal)
+13. [Yang berubah di versi ini](#13-yang-berubah-di-versi-ini)
 
 ---
 
@@ -58,6 +59,8 @@ Ini yang membuat mengoprek tampilan jadi cepat.
 ```
 
 Setiap kali Anda menyimpan berkas dengan `Ctrl+S`, tampilan di emulator ikut berubah tanpa build ulang. Namanya **hot reload**, biasanya di bawah satu detik.
+
+> **Jalankan `jalankan.bat` dengan klik dua kali dari File Explorer**, jangan lewat tombol Run atau Code Runner di VS Code. Panel Output VS Code tidak bisa menerima ketikan, jadi script berhenti sendiri dalam sedetik tanpa pesan apa pun — cirinya `exited with code=0` dan langkah `[1/4]` tidak pernah muncul. Kalau tetap ingin lewat VS Code, pakai Terminal VS Code (Ctrl + backtick) lalu ketik `.\jalankan.bat`. Script sekarang mendeteksi hal ini dan memberi tahu, bukan diam saja.
 
 ### Di VS Code
 
@@ -307,9 +310,11 @@ Cara praktis membuat kelima ukuran sekaligus: [icon.kitchen](https://icon.kitche
 
 ## 6. Isi Aplikasi
 
-**Beranda** — daftar nota, pencarian, kartu jumlah hutang, saringan "belum lunas"
+**Beranda** — satu kartu hutang yang sekaligus jadi tombol saring "belum lunas", kolom pencarian, lalu daftar nota
 
 **Nota baru** — pilih layanan dari daftar, atau isi baris manual untuk hal yang tidak punya tarif tetap seperti hutang, saldo titipan, atau tambahan pemutih. Satuan bebas diketik, boleh juga dikosongkan.
+
+Nama pelanggan memberi saran dari nota yang pernah dibuat, jadi pelanggan langganan tidak perlu diketik ulang. Kolom harga punya tombol `+0`, `+00`, `+000` supaya tidak perlu menghitung nol satu per satu.
 
 **Layanan** — daftar tarif. Sudah terisi sepuluh contoh, silakan ubah atau hapus.
 
@@ -336,7 +341,12 @@ Teks biasa dicetak apa adanya. Teks dalam kurung kurawal diganti data nota.
 | `[L]` `[C]` `[R]` | rata kiri, tengah, kanan |
 | `[B]` | tebal |
 | `[H]` | huruf besar dua kali |
+| `[C3]` | angka di dalam tag = ukuran huruf, 1 sampai 8 |
 | `[?kunci]` | lewati baris ini kalau `{kunci}` kosong |
+
+**Ukuran huruf.** Tambahkan angka di dalam tag: `[C2]LAUNDRY JAYA` berarti tengah dua kali besar, `[BC3]LUNAS` berarti tebal tengah tiga kali. Angka 1 sampai 8, dan tanpa angka berarti ukuran biasa — jadi template lama tidak perlu diubah, dan `[H]` sendiri masih berarti dua kali.
+
+Makin besar hurufnya, makin sedikit yang muat sebaris. Pada kertas 32 kolom, ukuran 2 hanya muat 16 huruf dan ukuran 3 muat 10.
 
 **Tag di tengah baris:**
 
@@ -358,7 +368,7 @@ Kadang satu baris yang di layar jelas muat, di kertas malah jadi dua baris.
 
 Baris terpanjang di template bawaan panjangnya **31 karakter**, jadi sisanya cuma satu. Begitu ada nominal besar seperti `Rp1.250.000`, batas itu terlampaui.
 
-**Perbaikannya gratis:** buka **Pengaturan** → **Lebar kertas** → ubah dari `32` jadi `31`. Cetak ulang nota yang tadi melipat.
+**Perbaikannya gratis:** buka **Pengaturan** → bagian **Printer** → **Lebar kertas**. Tekan tombol minus untuk menurunkan satu angka, dari `32` jadi `31`. Ada juga pintasan angka yang sering dipakai: 30, 31, 32, 42, 48. Cetak ulang nota yang tadi melipat.
 
 Kalau masih melipat, turunkan lagi ke `30`. Kalau sampai 30 pun masih melipat, berarti penyebabnya bukan lebar kolom — beri tahu saya.
 
@@ -499,6 +509,9 @@ Emulator belum menyala atau sudah mati. Jalankan `jalankan.bat`, tunggu sampai l
 **Emulator tidak ada di daftar**
 Buat dulu lewat Android Studio → **Tools** → **Device Manager** → **Create Virtual Device**.
 
+**`jalankan.bat` langsung selesai, `exited with code=0` dalam sedetik**
+Dijalankan lewat Code Runner di VS Code. Panel Output tidak bisa menerima ketikan, jadi script berhenti saat menunggu jawaban Anda. Klik dua kali berkasnya dari File Explorer, atau pakai Terminal VS Code lalu ketik `.\jalankan.bat`.
+
 **`jalankan.bat` bilang Android SDK tidak ketemu**
 Script sudah menyisir seluruh `D:\Aplikasi`. Kalau tetap gagal, ia akan meminta Anda menempel lokasinya langsung di jendela itu — salin dari Android Studio → **Settings** → **Languages & Frameworks** → **Android SDK**, lihat kotak *Android SDK Location*.
 
@@ -551,3 +564,45 @@ Lihat bagian [Kalau baris melipat di printer](#8-kalau-baris-melipat-di-printer)
 Flutter dikunci di versi **3.22.3** supaya hasil build di laptop dan di GitHub Actions selalu sama.
 
 Aplikasi **tidak meminta izin INTERNET**. Tanpa izin itu, Android sendiri yang memblokir segala koneksi keluar, jadi data Anda dijamin tidak ke mana-mana. Yang diminta hanya Bluetooth, dan itu pun baru saat Anda menekan tombol yang membutuhkannya.
+
+---
+
+## 13. Yang Berubah di Versi Ini
+
+Daftar perubahan terbaru, supaya Anda tidak perlu menebak apa yang baru.
+
+### Tampilan
+
+**Beranda dirapikan jadi satu baris.** Dua kotak dan chip saringan digabung jadi satu kartu: nominal hutang di kiri, jumlah nota di bawahnya, ikon saringan di kanan. Menekan kartunya langsung menyaring nota yang belum lunas.
+
+**Ukuran huruf mengikuti HP, bukan dipaksa.** Semua teks memakai gaya tema, jadi ikut setelan *Ukuran Tampilan* di HP Anda. Memaksa huruf besar justru membuatnya terpotong di layar sempit. Nominal rupiah mengecil sendiri hanya kalau benar-benar tidak muat.
+
+**Daftar nota lebih rapat.** Satu layar HP kecil sekarang memuat 7–8 pelanggan, sebelumnya 5–6.
+
+**Keyboard tidak lagi menutupi isian.** Berlaku di layar nota baru dan di lembar pilih layanan — kolom carinya dulu tertutup persis saat mulai mengetik.
+
+### Mengisi nota
+
+**Nama pelanggan memberi saran.** Ketik dua huruf, nama yang pernah dipakai akan muncul dengan ikon jam. Tekan silang di sebelahnya kalau ada nama salah ketik yang mengganggu — notanya tetap utuh, hanya tidak disarankan lagi. Kembalikan lewat Pengaturan → Beranda → Saran nama pelanggan.
+
+**Tombol nol untuk harga.** Ketik `7`, tekan `+000`, jadi `7000`. Ada `+0`, `+000`, dan `C` untuk hapus. Terpasang di harga item, harga layanan, dan uang diterima.
+
+**Isian wajib ditandai bintang merah**, seperti di formulir online. Yang wajib hanya nama pelanggan, nama item, jumlah, dan harga.
+
+### Printer
+
+**Printer naik ke menu titik tiga**, tidak lagi terkubur di dalam Pengaturan.
+
+**Kalau gagal mencetak, bisa dibereskan di tempat.** Muncul dialog dengan tombol **Setelan Bluetooth** — nyalakan Bluetooth atau pasangkan printer, tekan kembali, lalu **Coba Cetak Lagi**. Nota sudah tersimpan sebelum mencetak, jadi tidak ada isian yang hilang. Kalau memilih Nanti Saja, notanya tetap bisa dicetak dari beranda.
+
+**Lebar kertas akhirnya bisa diatur.** Sebelumnya hanya ada dua tombol, 58mm dan 80mm — angka 31 atau 30 tidak bisa dipilih sama sekali. Sekarang ada tombol minus/plus satuan plus pintasan 30, 31, 32, 42, 48.
+
+**Ukuran huruf di struk bisa diatur.** Tambahkan angka di dalam tag: `[C2]` tengah dua kali besar, `[BC3]` tebal tengah tiga kali. Angka 1 sampai 8. Template lama tidak perlu diubah.
+
+### Soal ukuran aplikasi
+
+APK dari GitHub Actions sekitar **22,5 MB**, tapi di HP terbaca sekitar **50 MB**. Ini wajar, bukan tanda ada yang salah.
+
+Dua sebabnya. Pertama, APK itu berkas ZIP terkompresi, dan Android membongkarnya saat memasang — biasanya mengembang 1,4 sampai 1,6 kali. Kedua, APK ini berisi kode untuk tiga jenis prosesor sekaligus (arm64, arm32, x86_64) supaya satu berkas bisa dipasang di HP mana pun, lalu Android menyimpan salinan kode itu di luar APK dan membuat cache supaya aplikasi cepat dibuka.
+
+Kalau suatu saat ukurannya terasa mengganggu, build bisa dipecah per prosesor (`--split-per-abi`) sehingga APK jadi sekitar 9–10 MB dan di HP sekitar 22–25 MB. Konsekuensinya Anda harus memilih berkas yang tepat untuk tiap HP, jadi belum saya terapkan.

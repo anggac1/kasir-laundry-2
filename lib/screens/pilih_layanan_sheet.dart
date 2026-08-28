@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/models.dart';
 import '../utils/fmt.dart';
 
-/// Lembar bawah untuk memilih satu layanan. Mengembalikan null bila ditutup.
+// Lembar bawah untuk memilih satu layanan. Mengembalikan null bila ditutup.
 Future<Layanan?> pilihLayananSheet(
   BuildContext context,
   List<Layanan> layanan,
@@ -11,7 +11,12 @@ Future<Layanan?> pilihLayananSheet(
   return showModalBottomSheet<Layanan>(
     context: context,
     isScrollControlled: true,
-    builder: (_) => _PilihLayananSheet(layanan: layanan),
+    // Lembarnya digeser naik setinggi keyboard, kalau tidak kolom carinya
+    // tertutup persis saat pengguna mulai mengetik.
+    builder: (ctx) => Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+      child: _PilihLayananSheet(layanan: layanan),
+    ),
   );
 }
 

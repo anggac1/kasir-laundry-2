@@ -65,7 +65,7 @@ class _PrinterSetupScreenState extends State<PrinterSetupScreen> {
     // bilangan negatif.
     final ulang = (l ~/ 10).clamp(0, 20);
     final baris = <BarisStruk>[
-      const BarisStruk('CONTOH', rata: 1, tebal: true, besar: true),
+      const BarisStruk('CONTOH', rata: 1, tebal: true, skala: 2),
       const BarisStruk('BUKAN STRUK PELANGGAN', rata: 1, tebal: true),
       BarisStruk('-' * l),
       BarisStruk('Lebar kertas: $l karakter'),
@@ -74,8 +74,8 @@ class _PrinterSetupScreenState extends State<PrinterSetupScreen> {
       const BarisStruk('Rata tengah', rata: 1),
       const BarisStruk('Rata kanan', rata: 2),
       const BarisStruk('[B] huruf tebal', tebal: true),
-      const BarisStruk('[H] besar', besar: true),
-      const BarisStruk('[BH] tebal', tebal: true, besar: true),
+      const BarisStruk('[H] besar', skala: 2),
+      const BarisStruk('[BH] tebal', tebal: true, skala: 2),
       BarisStruk('-' * l),
       const BarisStruk('Angka di atas harus pas', rata: 1),
       const BarisStruk('satu baris penuh.', rata: 1),
@@ -194,6 +194,8 @@ class _PrinterSetupScreenState extends State<PrinterSetupScreen> {
                     style: OutlinedButton.styleFrom(
                         minimumSize: const Size.fromHeight(48)),
                   ),
+                  const SizedBox(height: 8),
+                  _tombolSetelanBluetooth(),
                   const Padding(
                     padding: EdgeInsets.only(top: 8),
                     child: Text(
@@ -204,6 +206,42 @@ class _PrinterSetupScreenState extends State<PrinterSetupScreen> {
                       style: TextStyle(fontSize: 12, color: Colors.grey),
                     ),
                   ),
+                ],
+              ),
+            ),
+
+          // Bluetooth mati, atau menyala tapi belum ada printer terpasang.
+          // Keduanya diselesaikan di layar Setelan Bluetooth HP, jadi
+          // tombolnya diletakkan di sini supaya tidak perlu keluar sendiri.
+          if (d != null && d.izinDiberikan && !d.bluetoothMenyala)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: Column(
+                children: [
+                  const Text(
+                    'Bluetooth di HP masih mati. Nyalakan dulu, lalu kembali '
+                    'ke sini dan tekan ikon segarkan.',
+                    style: TextStyle(fontSize: 13),
+                  ),
+                  const SizedBox(height: 8),
+                  _tombolSetelanBluetooth(),
+                ],
+              ),
+            ),
+
+          if (d != null && d.izinDiberikan && d.bluetoothMenyala &&
+              d.perangkat.isEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: Column(
+                children: [
+                  const Text(
+                    'Belum ada printer yang dipasangkan. Pasangkan dulu di '
+                    'Setelan Bluetooth, lalu kembali dan tekan segarkan.',
+                    style: TextStyle(fontSize: 13),
+                  ),
+                  const SizedBox(height: 8),
+                  _tombolSetelanBluetooth(),
                 ],
               ),
             ),
@@ -288,6 +326,26 @@ class _PrinterSetupScreenState extends State<PrinterSetupScreen> {
             ),
         ],
       ),
+    );
+  }
+
+  // Membuka Setelan Bluetooth HP. Kalau perangkat menolak, pengguna
+  // diberi tahu cara manualnya, bukan dibiarkan menebak.
+  Widget _tombolSetelanBluetooth() {
+    return FilledButton.tonalIcon(
+      onPressed: () async {
+        final ok = await PrinterService.instance.bukaSetelanBluetooth();
+        if (!mounted || ok) return;
+        pesan(
+          context,
+          'Tidak bisa membuka Setelan otomatis. Buka Setelan HP lalu '
+          'cari Bluetooth.',
+          galat: true,
+        );
+      },
+      icon: const Icon(Icons.settings_bluetooth),
+      label: const Text('Buka Setelan Bluetooth'),
+      style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
     );
   }
 

@@ -30,9 +30,9 @@ Future<ItemNota?> dialogQtyLayanan(
               controller: qtyCtrl,
               autofocus: true,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: InputDecoration(
-                labelText: l.satuan == Satuan.kg ? 'Berat (kg)' : 'Jumlah (pcs)',
-                helperText: l.satuan == Satuan.kg
+              decoration: hiasanWajib(
+                label: l.satuan == Satuan.kg ? 'Berat (kg)' : 'Jumlah (pcs)',
+                bantuan: l.satuan == Satuan.kg
                     ? 'Boleh desimal, contoh 3.5'
                     : 'Angka bulat',
               ),
@@ -41,11 +41,13 @@ Future<ItemNota?> dialogQtyLayanan(
             TextField(
               controller: hargaCtrl,
               keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: 'Harga per ${l.satuan}',
-                helperText: 'Bisa diubah khusus nota ini',
+              decoration: hiasanWajib(
+                label: 'Harga per ${l.satuan}',
+                prefix: 'Rp ',
+                bantuan: 'Bisa diubah khusus nota ini',
               ),
             ),
+            TombolNol(controller: hargaCtrl),
           ],
         ),
         actions: [
@@ -111,9 +113,9 @@ Future<ItemNota?> dialogItemManual(
                 controller: namaCtrl,
                 autofocus: true,
                 textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(
-                  labelText: 'Nama',
-                  hintText: 'Tambah Pemutih / Hutang / Saldo',
+                decoration: hiasanWajib(
+                  label: 'Nama',
+                  hint: 'Tambah Pemutih / Hutang / Saldo',
                 ),
               ),
               const SizedBox(height: 12),
@@ -124,7 +126,7 @@ Future<ItemNota?> dialogItemManual(
                       controller: qtyCtrl,
                       keyboardType:
                           const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(labelText: 'Jumlah'),
+                      decoration: hiasanWajib(label: 'Jumlah'),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -152,12 +154,13 @@ Future<ItemNota?> dialogItemManual(
                 controller: hargaCtrl,
                 keyboardType:
                     const TextInputType.numberWithOptions(signed: true),
-                decoration: const InputDecoration(
-                  labelText: 'Harga satuan',
-                  prefixText: 'Rp ',
-                  helperText: 'Boleh minus untuk potongan, contoh -5000',
+                decoration: hiasanWajib(
+                  label: 'Harga satuan',
+                  prefix: 'Rp ',
+                  bantuan: 'Boleh minus untuk potongan, contoh -5000',
                 ),
               ),
+              TombolNol(controller: hargaCtrl),
             ],
           ),
         ),

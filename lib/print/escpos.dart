@@ -25,11 +25,18 @@ class EscPos {
 
   void tebal(bool on) => _b.addAll([_esc, 0x45, on ? 1 : 0]);
 
-  // Dua perintah sekaligus karena printer murah tidak seragam: GS ! dipahami
-  // mayoritas, ESC ! dipahami sebagian printer lama yang mengabaikan GS !.
-  void besar(bool on) {
-    _b.addAll([_gs, 0x21, on ? 0x11 : 0x00]);
-    _b.addAll([_esc, 0x21, on ? 0x30 : 0x00]);
+  // Skala 1 sampai 8, batas perangkat kerasnya. 1 berarti ukuran normal.
+  //
+  // Dua perintah dikirim sekaligus karena printer murah tidak seragam:
+  // GS ! dipahami mayoritas, ESC ! dipahami sebagian printer lama yang
+  // mengabaikan GS !. ESC ! hanya punya satu tingkat, jadi ia dinyalakan
+  // untuk skala berapa pun di atas 1.
+  void besar(int skala) {
+    final n = skala.clamp(1, 8) - 1;
+    // GS ! : 4 bit atas = lebar, 4 bit bawah = tinggi.
+    _b.addAll([_gs, 0x21, (n << 4) | n]);
+    // ESC ! : 0x20 lebar dobel, 0x10 tinggi dobel.
+    _b.addAll([_esc, 0x21, n > 0 ? 0x30 : 0x00]);
   }
 
   void teks(String s) {
@@ -91,12 +98,12 @@ class EscPos {
     // jadi ESC E harus selalu menyusul sesudahnya.
     for (final b in baris) {
       p.rata(b.rata);
-      p.besar(b.besar);
+      p.besar(b.skala);
       p.tebal(b.tebal);
       p.teks(b.teks);
     }
 
-    p.besar(false);
+    p.besar(1);
     p.tebal(false);
     p.rata(rataKiri);
 

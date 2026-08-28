@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../db/db.dart';
 import '../models/models.dart';
-import '../print/printer_service.dart';
 import '../store/settings.dart';
 import '../ui/umum.dart';
 import '../utils/fmt.dart';
+import 'dialog_cetak.dart';
 import 'dialog_item.dart';
 import 'nota_detail.dart';
 import 'pilih_layanan_sheet.dart';
@@ -229,6 +229,16 @@ class _NotaBaruScreenState extends State<NotaBaruScreen> {
 
   // Pratinjau dulu, baru cetak. Kalau pengguna menekan "Perbaiki Dulu",
   // tidak ada yang disimpan dan tidak ada kertas yang terpakai.
+  // Nama yang pernah dibuang pengguna disaring di sini, bukan di database,
+  // supaya notanya sendiri tetap utuh dan bisa dicari seperti biasa.
+  Future<List<String>> _saranNama(String awalan) async {
+    final hasil = await DB.instance.saranNama(awalan);
+    final buang = Settings.instance.namaDisembunyikan
+        .map((n) => n.toLowerCase())
+        .toSet();
+    return hasil.where((n) => !buang.contains(n.toLowerCase())).toList();
+  }
+
   Future<void> _simpanDanCetak() async {
     if (!_isianLengkap()) return;
 
@@ -239,9 +249,12 @@ class _NotaBaruScreenState extends State<NotaBaruScreen> {
 
     final n = await _simpan();
     if (n == null || !mounted) return;
-    final hasil = await PrinterService.instance.cetakNota(n);
+
+    // Kalau printer bermasalah, dialognya menawarkan jalan ke Setelan
+    // Bluetooth lalu mencetak lagi di tempat. Nota sudah tersimpan, jadi
+    // apa pun hasilnya isian tidak hilang.
+    await cetakDenganPemulihan(context, n);
     if (!mounted) return;
-    pesan(context, hasil.pesan, galat: !hasil.sukses);
     _lanjutSetelahSimpan(n);
   }
 
@@ -250,15 +263,22 @@ class _NotaBaruScreenState extends State<NotaBaruScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(_modeEdit ? 'Ubah Nota' : 'Nota Baru')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        // Ruang bawah ditambah setinggi keyboard, supaya isian terakhir dan
+        // daftar saran nama tidak tertutup saat mengetik.
+        padding: EdgeInsets.fromLTRB(
+          16,
+          16,
+          16,
+          16 + MediaQuery.of(context).viewInsets.bottom,
+        ),
         children: [
-          TextField(
+          KolomNama(
             controller: _namaCtrl,
-            textCapitalization: TextCapitalization.words,
-            decoration: const InputDecoration(
-              labelText: 'Nama pelanggan',
-              prefixIcon: Icon(Icons.person_outline),
-            ),
+            cariSaran: _saranNama,
+            hapusSaran: (n) async {
+              await Settings.instance.sembunyikanNama(n);
+              if (mounted) pesan(context, 'Nama "\$n" tidak disarankan lagi.');
+            },
           ),
           const SizedBox(height: 16),
           const Text('Kapan nota ini dibuat?',
@@ -400,14 +420,20 @@ class _NotaBaruScreenState extends State<NotaBaruScreen> {
           // ini saja yang dibangun ulang.
           ValueListenableBuilder<TextEditingValue>(
             valueListenable: _uangCtrl,
-            builder: (_, nilai, __) => TextField(
-              controller: _uangCtrl,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: 'Uang diterima (opsional)',
-                prefixText: 'Rp ',
-                helperText: _uangKembalianInfo(nilai.text),
-              ),
+            builder: (_, nilai, __) => Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: _uangCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: 'Uang diterima (opsional)',
+                    prefixText: 'Rp ',
+                    helperText: _uangKembalianInfo(nilai.text),
+                  ),
+                ),
+                TombolNol(controller: _uangCtrl),
+              ],
             ),
           ),
           const SizedBox(height: 12),

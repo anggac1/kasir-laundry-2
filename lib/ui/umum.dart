@@ -1,5 +1,7 @@
 // Potongan UI yang dipakai berulang di banyak layar.
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 // Snackbar seragam. Sebelumnya disalin di 4 layar.
@@ -202,3 +204,260 @@ class KertasPutih extends StatelessWidget {
     );
   }
 }
+
+// Kolom nama pelanggan dengan saran dari nota yang sudah pernah dibuat.
+//
+// Saran dicari setelah jeda singkat, bukan tiap ketukan tombol, supaya
+// mengetik cepat tidak menembak database berkali-kali.
+class KolomNama extends StatefulWidget {
+  final TextEditingController controller;
+  final Future<List<String>> Function(String awalan) cariSaran;
+  final String label;
+  final bool wajib;
+
+  // Dipanggil saat pengguna menekan silang di sebelah satu saran. Nama itu
+  // tidak akan muncul lagi. Kalau null, tombol silangnya tidak ditampilkan.
+  final Future<void> Function(String nama)? hapusSaran;
+
+  const KolomNama({
+    required this.controller,
+    required this.cariSaran,
+    this.hapusSaran,
+    this.label = 'Nama pelanggan',
+    this.wajib = true,
+    super.key,
+  });
+
+  @override
+  State<KolomNama> createState() => _KolomNamaState();
+}
+
+class _KolomNamaState extends State<KolomNama> {
+  final _fokus = FocusNode();
+  Timer? _jeda;
+  List<String> _saran = [];
+  bool _tampil = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fokus.addListener(() {
+      if (!_fokus.hasFocus) setState(() => _tampil = false);
+    });
+  }
+
+  @override
+  void dispose() {
+    _jeda?.cancel();
+    _fokus.dispose();
+    super.dispose();
+  }
+
+  void _ketik(String v) {
+    _jeda?.cancel();
+    _jeda = Timer(const Duration(milliseconds: 250), () async {
+      final hasil = await widget.cariSaran(v);
+      if (!mounted) return;
+      setState(() {
+        // Nama yang sudah diketik lengkap tidak perlu disarankan lagi.
+        _saran = hasil
+            .where((n) => n.toLowerCase() != v.trim().toLowerCase())
+            .toList();
+        _tampil = _saran.isNotEmpty && _fokus.hasFocus;
+      });
+    });
+  }
+
+  Future<void> _hapus(String nama) async {
+    await widget.hapusSaran?.call(nama);
+    if (!mounted) return;
+    setState(() {
+      _saran = _saran.where((n) => n != nama).toList();
+      _tampil = _saran.isNotEmpty;
+    });
+  }
+
+  void _pilih(String nama) {
+    widget.controller
+      ..text = nama
+      ..selection = TextSelection.collapsed(offset: nama.length);
+    setState(() => _tampil = false);
+    _fokus.unfocus();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: widget.controller,
+          focusNode: _fokus,
+          textCapitalization: TextCapitalization.words,
+          decoration: InputDecoration(
+            label: widget.wajib ? labelWajib(widget.label) : Text(widget.label),
+            prefixIcon: const Icon(Icons.person_outline),
+            suffixIcon: widget.controller.text.isEmpty
+                ? null
+                : IconButton(
+                    icon: const Icon(Icons.close),
+                    tooltip: 'Hapus',
+                    onPressed: () {
+                      widget.controller.clear();
+                      setState(() => _tampil = false);
+                    },
+                  ),
+          ),
+          onChanged: (v) {
+            setState(() {});
+            _ketik(v);
+          },
+        ),
+        if (_tampil)
+          Container(
+            margin: const EdgeInsets.only(top: 4),
+            constraints: const BoxConstraints(maxHeight: 240),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey.shade300),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: ListView(
+              shrinkWrap: true,
+              padding: EdgeInsets.zero,
+              children: [
+                for (final n in _saran)
+                  InkWell(
+                    onTap: () => _pilih(n),
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 12),
+                      child: Row(
+                        children: [
+                          Icon(Icons.history,
+                              size: 18, color: Colors.grey.shade600),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(n,
+                                style: const TextStyle(fontSize: 15),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis),
+                          ),
+                          // Salah ketik nama pelanggan akan terus muncul di
+                          // saran kalau tidak bisa dibuang dari sini.
+                          if (widget.hapusSaran != null)
+                            IconButton(
+                              icon: const Icon(Icons.close, size: 18),
+                              tooltip: 'Hapus dari saran',
+                              visualDensity: VisualDensity.compact,
+                              onPressed: () => _hapus(n),
+                            )
+                          else
+                            const SizedBox(width: 12),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+// Tombol cepat menambah nol pada kolom angka.
+//
+// Mengetik 7 lalu menekan +000 jauh lebih cepat daripada mengetik 7000,
+// dan lebih kecil kemungkinan salah hitung nolnya. Hanya +0 dan +000
+// yang disediakan: +00 jarang dipakai dan hanya menambah tombol.
+class TombolNol extends StatelessWidget {
+  final TextEditingController controller;
+  final VoidCallback? sesudah;
+
+  const TombolNol({required this.controller, this.sesudah, super.key});
+
+  void _tambah(String nol) {
+    final teks = controller.text.trim();
+    // Tidak ada gunanya membuat "000" dari kolom kosong.
+    if (teks.isEmpty || teks == '0') return;
+    final baru = teks + nol;
+    controller
+      ..text = baru
+      ..selection = TextSelection.collapsed(offset: baru.length);
+    sesudah?.call();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Widget tombol(String nol) => Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: OutlinedButton(
+              onPressed: () => _tambah(nol),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                minimumSize: const Size(0, 44),
+              ),
+              child: Text('+$nol',
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w600)),
+            ),
+          ),
+        );
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(
+        children: [
+          tombol('0'),
+          tombol('000'),
+          Expanded(
+            child: OutlinedButton(
+              onPressed: () {
+                controller.clear();
+                sesudah?.call();
+              },
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                minimumSize: const Size(0, 44),
+              ),
+              child: const Text('C', style: TextStyle(fontSize: 15)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Tanda bintang merah untuk isian yang wajib, seperti di Google Form.
+Widget labelWajib(String teks) => RichText(
+      text: TextSpan(
+        style: const TextStyle(fontSize: 15, color: Colors.black87),
+        children: [
+          TextSpan(text: teks),
+          const TextSpan(
+            text: ' *',
+            style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
+
+// Sama, tapi untuk labelText di dalam InputDecoration yang hanya mau String.
+// Bintangnya diwarnai lewat InputDecoration.label, bukan labelText.
+InputDecoration hiasanWajib({
+  required String label,
+  String? hint,
+  String? bantuan,
+  Widget? ikon,
+  String? prefix,
+  Widget? suffix,
+}) =>
+    InputDecoration(
+      label: labelWajib(label),
+      hintText: hint,
+      helperText: bantuan,
+      prefixIcon: ikon,
+      prefixText: prefix,
+      suffixIcon: suffix,
+    );

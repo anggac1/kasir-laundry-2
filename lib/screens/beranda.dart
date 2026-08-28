@@ -10,6 +10,7 @@ import 'layanan.dart';
 import 'nota_baru.dart';
 import 'nota_detail.dart';
 import 'panduan.dart';
+import 'printer_setup.dart';
 import 'pengaturan.dart';
 import 'template_editor.dart';
 
@@ -116,6 +117,9 @@ class _BerandaScreenState extends State<BerandaScreen> {
                 case 'template':
                   _buka(const TemplateEditorScreen());
                   break;
+                case 'printer':
+                  _buka(const PrinterSetupScreen());
+                  break;
                 case 'pengaturan':
                   _buka(const PengaturanScreen());
                   break;
@@ -125,6 +129,16 @@ class _BerandaScreenState extends State<BerandaScreen> {
               }
             },
             itemBuilder: (_) => const [
+              // Printer diletakkan paling atas: ini yang paling sering
+              // dibuka saat ada masalah, dan dulu terkubur di Pengaturan.
+              PopupMenuItem(
+                value: 'printer',
+                child: ListTile(
+                  leading: Icon(Icons.print_outlined),
+                  title: Text('Printer'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
               PopupMenuItem(
                 value: 'layanan',
                 child: ListTile(
@@ -236,88 +250,104 @@ class _BerandaScreenState extends State<BerandaScreen> {
     );
   }
 
+  // Satu baris ringkas: nilai hutang, jumlah nota, dan tombol saring.
+  //
+  // Ukuran huruf mengikuti setelan Ukuran Tampilan di HP lewat textScaler,
+  // bukan dipaksa besar. Pada layar sempit atau DPI rendah, memaksa huruf
+  // besar justru membuatnya terpotong; membiarkannya menyesuaikan diri
+  // lebih terbaca. FittedBox hanya mengecilkan nominal bila benar-benar
+  // tidak muat, dan tidak pernah membuatnya lebih kecil dari 13.
   Widget _kartuRingkasan() {
-    Widget kotak(String judul, String nilai, IconData ikon, Color warna) {
-      return Expanded(
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: warna.withAlpha(26),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(ikon, size: 18, color: warna),
-              const SizedBox(height: 6),
-              Text(nilai,
-                  style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: warna)),
-              Text(judul,
-                  style: const TextStyle(fontSize: 11),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis),
-            ],
-          ),
-        ),
-      );
-    }
+    final nilai = _ringkasan['belumLunasNilai'] ?? 0;
+    final jml = _ringkasan['belumLunasJml'] ?? 0;
+    final merah = Colors.red.shade700;
+    final teks = Theme.of(context).textTheme;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-      child: Row(
-        children: [
-          kotak('Belum dibayar', rupiah(_ringkasan['belumLunasNilai'] ?? 0),
-              Icons.account_balance_wallet_outlined, Colors.red.shade700),
-          const SizedBox(width: 8),
-          kotak('Nota berhutang', '${_ringkasan['belumLunasJml'] ?? 0} nota',
-              Icons.error_outline, Colors.orange.shade800),
-        ],
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+      child: Material(
+        color: merah.withAlpha(20),
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () {
+            setState(() => _hanyaHutang = !_hanyaHutang);
+            _muat();
+          },
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+            child: Row(
+              children: [
+                Icon(Icons.account_balance_wallet_outlined,
+                    size: 24, color: merah),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          rupiah(nilai),
+                          maxLines: 1,
+                          style: teks.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: merah,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        'Belum dibayar  -  $jml nota',
+                        style: teks.bodySmall,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Saringan menyatu dengan kartunya: menekan kartu berarti
+                // menampilkan nota yang belum lunas saja.
+                Icon(
+                  _hanyaHutang ? Icons.filter_alt : Icons.filter_alt_outlined,
+                  size: 24,
+                  color: _hanyaHutang ? merah : Colors.grey.shade600,
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
 
+  // Tinggal kolom pencarian: saringan "belum lunas" sudah menyatu dengan
+  // kartu hutang di atasnya.
   Widget _barisFilter() {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-          child: TextField(
-            controller: _cariCtrl,
-            onChanged: (_) => _cariBerubah(),
-            decoration: InputDecoration(
-              hintText: 'Cari nama pelanggan atau nomor nota',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: _cariCtrl.text.isEmpty
-                  ? null
-                  : IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () {
-                        _jedaCari?.cancel();
-                        _cariCtrl.clear();
-                        _muat();
-                      },
-                    ),
-            ),
-          ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+      child: TextField(
+        controller: _cariCtrl,
+        onChanged: (_) => _cariBerubah(),
+        style: const TextStyle(fontSize: 16),
+        decoration: InputDecoration(
+          hintText: 'Cari nama atau nomor nota',
+          prefixIcon: const Icon(Icons.search),
+          suffixIcon: _cariCtrl.text.isEmpty
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.close),
+                  tooltip: 'Hapus pencarian',
+                  onPressed: () {
+                    _jedaCari?.cancel();
+                    _cariCtrl.clear();
+                    _muat();
+                  },
+                ),
         ),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
-            child: FilterChip(
-              label: const Text('Belum lunas'),
-              selected: _hanyaHutang,
-              onSelected: (v) {
-                setState(() => _hanyaHutang = v);
-                _muat();
-              },
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
 
@@ -338,30 +368,64 @@ class _BerandaScreenState extends State<BerandaScreen> {
     );
   }
 
+  // Baris nota, dibuat ringkas supaya 7-8 pelanggan muat dalam satu layar
+  // bahkan di HP kecil. Ukuran huruf memakai gaya tema, jadi ikut setelan
+  // Ukuran Tampilan di HP dan tetap terbaca pada DPI rendah.
   Widget _baris(Nota n) {
     final id = n.id;
-    return ListTile(
+    final hijau = Colors.green.shade700;
+    final teks = Theme.of(context).textTheme;
+
+    return InkWell(
       onTap: id == null ? null : () => _buka(NotaDetailScreen(notaId: id)),
-      title: Text(n.pelanggan,
-          style: const TextStyle(fontWeight: FontWeight.w600)),
-      subtitle: Text('${n.kode}  -  ${tanggal(n.dibuat)} ${jam(n.dibuat)}'),
-      trailing: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Text(rupiah(n.nilaiTampil),
-              style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: n.adaSisaSaldo ? Colors.green.shade700 : null)),
-          if (n.adaSisaSaldo)
-            Text('sisa saldo',
-                style: TextStyle(
-                    fontSize: 10, color: Colors.green.shade700)),
-          const SizedBox(height: 4),
-          LencanaBayar(statusBayar: n.statusBayar),
-        ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    n.pelanggan,
+                    style: teks.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    '${n.kode}  -  ${tanggal(n.dibuat)}',
+                    style: teks.bodySmall?.copyWith(color: Colors.grey.shade600),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  rupiah(n.nilaiTampil),
+                  style: teks.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: n.adaSisaSaldo ? hijau : null,
+                  ),
+                  maxLines: 1,
+                ),
+                const SizedBox(height: 2),
+                if (n.adaSisaSaldo)
+                  Text('sisa saldo',
+                      style: teks.labelSmall?.copyWith(color: hijau))
+                else
+                  LencanaBayar(statusBayar: n.statusBayar),
+              ],
+            ),
+          ],
+        ),
       ),
-      isThreeLine: false,
     );
   }
 }

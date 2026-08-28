@@ -148,19 +148,62 @@ class _PengaturanScreenState extends State<PengaturanScreen> {
           ListTile(
             leading: const Icon(Icons.straighten),
             title: const Text('Lebar kertas'),
-            subtitle: Text(s.lebarKertas == 32
-                ? '58mm  (32 karakter)'
-                : '80mm  (48 karakter)'),
-            trailing: SegmentedButton<int>(
-              segments: const [
-                ButtonSegment(value: 32, label: Text('58mm')),
-                ButtonSegment(value: 48, label: Text('80mm')),
+            subtitle: Text('${s.lebarKertas} karakter per baris'),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.remove_circle_outline),
+                  tooltip: 'Kurangi satu',
+                  onPressed: s.lebarKertas <= kLebarMin
+                      ? null
+                      : () async {
+                          await s.setLebarKertas(s.lebarKertas - 1);
+                          if (mounted) setState(() {});
+                        },
+                ),
+                Text('${s.lebarKertas}',
+                    style: const TextStyle(
+                        fontSize: 17, fontWeight: FontWeight.w700)),
+                IconButton(
+                  icon: const Icon(Icons.add_circle_outline),
+                  tooltip: 'Tambah satu',
+                  onPressed: s.lebarKertas >= kLebarMaks
+                      ? null
+                      : () async {
+                          await s.setLebarKertas(s.lebarKertas + 1);
+                          if (mounted) setState(() {});
+                        },
+                ),
               ],
-              selected: {s.lebarKertas},
-              onSelectionChanged: (v) async {
-                await s.setLebarKertas(v.first);
-                if (mounted) setState(() {});
-              },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Patokan: 58mm = 32, 80mm = 48. Kalau baris yang di layar '
+                  'terlihat muat ternyata melipat di kertas, turunkan satu '
+                  'angka jadi 31, lalu 30 bila masih melipat.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  children: [
+                    for (final n in const [30, 31, 32, 42, 48])
+                      ActionChip(
+                        label: Text('$n'),
+                        onPressed: () async {
+                          await s.setLebarKertas(n);
+                          if (mounted) setState(() {});
+                        },
+                      ),
+                  ],
+                ),
+              ],
             ),
           ),
           SwitchListTile(
@@ -367,6 +410,24 @@ class _PengaturanScreenState extends State<PengaturanScreen> {
               'dengan titik kecil saat angkanya sudah berubah.',
               style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.person_search_outlined),
+            title: const Text('Saran nama pelanggan'),
+            subtitle: Text(s.namaDisembunyikan.isEmpty
+                ? 'Semua nama disarankan'
+                : '${s.namaDisembunyikan.length} nama disembunyikan'),
+            trailing: s.namaDisembunyikan.isEmpty
+                ? null
+                : TextButton(
+                    onPressed: () async {
+                      await s.tampilkanSemuaNama();
+                      if (!mounted) return;
+                      setState(() {});
+                      pesan(context, 'Semua nama disarankan lagi.');
+                    },
+                    child: const Text('Tampilkan'),
+                  ),
           ),
           const Divider(),
           _seksi('Data'),

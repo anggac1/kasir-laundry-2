@@ -50,14 +50,19 @@ class BarisStruk {
   final String teks;
   final int rata;
   final bool tebal;
-  final bool besar;
+
+  // 1 = ukuran normal. 2 berarti dua kali lebar dan tinggi, dan seterusnya
+  // sampai 8, yang merupakan batas perangkat kerasnya.
+  final int skala;
 
   const BarisStruk(
     this.teks, {
     this.rata = EscPos.rataKiri,
     this.tebal = false,
-    this.besar = false,
+    this.skala = 1,
   });
+
+  bool get besar => skala > 1;
 }
 
 // Mesin template struk.
@@ -69,7 +74,7 @@ class BarisStruk {
 //   [>] dorong sisanya ke kanan, untuk "TOTAL ....... Rp50.000"
 // Baris berisi --- atau === menjadi garis pemisah selebar kertas.
 class Struk {
-  static final _tag = RegExp(r'^\[([A-Za-z]{1,4})\]');
+  static final _tag = RegExp(r'^\[([A-Za-z0-9]{1,6})\]');
   static final _garis = RegExp(r'^(-{3,}|={3,}|\*{3,})$');
   static final _syarat = RegExp(r'^\[\?([a-z0-9_]+)\]');
 
@@ -143,7 +148,7 @@ class Struk {
   static String pratinjau(List<BarisStruk> baris, int lebar) {
     final buf = StringBuffer();
     for (final b in baris) {
-      final efektif = lebarEfektif(lebar, b.besar);
+      final efektif = lebarEfektif(lebar, b.skala);
       var t = b.teks;
       if (t.length > efektif) t = t.substring(0, efektif);
 
@@ -157,9 +162,9 @@ class Struk {
     return buf.toString();
   }
 
-  // Huruf dobel memakan dua kali lebar, jadi kolom yang muat separuhnya.
-  static int lebarEfektif(int lebar, bool besar) =>
-      (besar ? lebar ~/ 2 : lebar).clamp(1, kLebarMaks);
+  // Huruf berskala 2 memakan dua kali lebar, jadi kolomnya tinggal separuh.
+  static int lebarEfektif(int lebar, int skala) =>
+      (lebar ~/ skala.clamp(1, 8)).clamp(1, kLebarMaks);
 
   static Map<String, String> _varsNota(
     Nota n,
@@ -232,7 +237,7 @@ class Struk {
       if (nilai.isEmpty || nilai == '-') return const [];
     }
 
-    final efektif = lebarEfektif(lebar, p.besar);
+    final efektif = lebarEfektif(lebar, p.skala);
 
     // Diubah ke ASCII lebih dulu, karena lebar cetak dihitung dari hasil
     // konversi. Tanpa ini, satu karakter seperti '…' yang jadi '...'
@@ -241,7 +246,7 @@ class Struk {
 
     final t = teks.trim();
     if (t.isNotEmpty && _garis.hasMatch(t)) {
-      return [BarisStruk(t[0] * efektif, tebal: p.tebal, besar: p.besar)];
+      return [BarisStruk(t[0] * efektif, tebal: p.tebal, skala: p.skala)];
     }
 
     final pisah = teks.indexOf('[>]');
@@ -252,26 +257,26 @@ class Struk {
 
       if (sisa >= 1) {
         return [
-          BarisStruk(kiri + ' ' * sisa + kanan, tebal: p.tebal, besar: p.besar)
+          BarisStruk(kiri + ' ' * sisa + kanan, tebal: p.tebal, skala: p.skala)
         ];
       }
       // Tidak muat sebaris: kiri di atas, kanan rata kanan di bawahnya.
       return [
         for (final l in _bungkus(kiri, efektif))
-          BarisStruk(l, tebal: p.tebal, besar: p.besar),
+          BarisStruk(l, tebal: p.tebal, skala: p.skala),
         BarisStruk(kanan,
-            rata: EscPos.rataKanan, tebal: p.tebal, besar: p.besar),
+            rata: EscPos.rataKanan, tebal: p.tebal, skala: p.skala),
       ];
     }
 
     // Baris kosong dipertahankan, dipakai untuk mengatur jarak.
     if (teks.isEmpty) {
-      return [BarisStruk('', rata: p.rata, tebal: p.tebal, besar: p.besar)];
+      return [BarisStruk('', rata: p.rata, tebal: p.tebal, skala: p.skala)];
     }
 
     return [
       for (final l in _bungkus(teks, efektif))
-        BarisStruk(l, rata: p.rata, tebal: p.tebal, besar: p.besar),
+        BarisStruk(l, rata: p.rata, tebal: p.tebal, skala: p.skala),
     ];
   }
 
@@ -311,7 +316,7 @@ class Struk {
     var s = raw;
     var rata = EscPos.rataKiri;
     var tebal = false;
-    var besar = false;
+    var skala = 1;
     String? syarat;
 
     // [?kunci] dibaca lebih dulu karena bentuknya berbeda dari tag biasa.
@@ -324,7 +329,14 @@ class Struk {
     while (true) {
       final m = _tag.firstMatch(s);
       if (m == null) break;
-      for (final c in m.group(1)!.toUpperCase().split('')) {
+      final isi = m.group(1)!.toUpperCase();
+
+      // Angka di dalam tag berarti ukuran huruf: [C2] tengah ukuran dua.
+      // Dibaca sebagai satu bilangan supaya [H10] tidak terbaca 1 lalu 0.
+      final angka = RegExp(r'\d+').firstMatch(isi);
+      if (angka != null) skala = int.parse(angka.group(0)!).clamp(1, 8);
+
+      for (final c in isi.replaceAll(RegExp(r'\d'), '').split('')) {
         switch (c) {
           case 'L':
             rata = EscPos.rataKiri;
@@ -335,12 +347,13 @@ class Struk {
           case 'B':
             tebal = true;
           case 'H':
-            besar = true;
+            // [H] tanpa angka tetap berarti dua kali besar, seperti dulu.
+            if (angka == null) skala = 2;
         }
       }
       s = s.substring(m.end);
     }
-    return _Parsed(s, rata, tebal, besar, syarat);
+    return _Parsed(s, rata, tebal, skala, syarat);
   }
 }
 
@@ -348,8 +361,8 @@ class _Parsed {
   final String teks;
   final int rata;
   final bool tebal;
-  final bool besar;
+  final int skala;
   final String? syarat;
 
-  const _Parsed(this.teks, this.rata, this.tebal, this.besar, this.syarat);
+  const _Parsed(this.teks, this.rata, this.tebal, this.skala, this.syarat);
 }

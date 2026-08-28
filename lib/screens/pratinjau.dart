@@ -21,7 +21,7 @@ class KertasStruk extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: baris.map((b) {
-          final efektif = Struk.lebarEfektif(lebar, b.besar);
+          final efektif = Struk.lebarEfektif(lebar, b.skala);
           var t = b.teks;
           if (t.length > efektif) t = t.substring(0, efektif);
 
@@ -32,7 +32,9 @@ class KertasStruk extends StatelessWidget {
                 : (b.rata == 2 ? TextAlign.right : TextAlign.left),
             style: TextStyle(
               fontFamily: 'monospace',
-              fontSize: b.besar ? 21 : 11,
+              // Ukuran huruf pratinjau mengikuti skala, dibatasi supaya
+              // baris berskala besar tidak melebar keluar layar.
+              fontSize: (11.0 * b.skala).clamp(11.0, 34.0),
               fontWeight: b.tebal ? FontWeight.w900 : FontWeight.normal,
               height: 1.3,
               color: Colors.black,

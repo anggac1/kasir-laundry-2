@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 
@@ -107,6 +108,26 @@ class PrinterService {
 
   Future<void> bukaPengaturanAplikasi() =>
       _aman(() => openAppSettings(), false);
+
+  // Buka layar Setelan Bluetooth di HP.
+  //
+  // Memakai MethodChannel bawaan Flutter, bukan paket tambahan. Sisi
+  // Android-nya dipasang oleh kode di android_overrides/MainActivity.kt,
+  // yang disalin GitHub Actions ke dalam kerangka proyek saat build.
+  //
+  // Mengembalikan false bila saluran itu tidak menjawab, supaya layar
+  // pemanggil bisa menampilkan petunjuk manual sebagai gantinya.
+  Future<bool> bukaSetelanBluetooth() {
+    const saluran = MethodChannel('kasir_laundry/setelan');
+    return _aman(
+      () async {
+        await saluran.invokeMethod<void>('bukaSetelanBluetooth');
+        return true;
+      },
+      false,
+      batas: const Duration(seconds: 5),
+    );
+  }
 
   Future<bool> bluetoothAktif() =>
       _aman(() => PrintBluetoothThermal.bluetoothEnabled, false);

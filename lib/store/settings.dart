@@ -149,6 +149,22 @@ class Settings {
   bool get pakaiEstimasi => _p.getBool('use_due_date') ?? true;
   Future<void> setPakaiEstimasi(bool v) => _p.setBool('use_due_date', v);
 
+  // Nama yang dibuang pengguna dari daftar saran, biasanya karena salah
+  // ketik. Notanya sendiri tidak dihapus, hanya tidak disarankan lagi.
+  List<String> get namaDisembunyikan =>
+      _p.getStringList('hidden_names') ?? const <String>[];
+
+  Future<void> sembunyikanNama(String nama) async {
+    final v = nama.trim();
+    if (v.isEmpty) return;
+    final daftar = [...namaDisembunyikan];
+    if (daftar.any((n) => n.toLowerCase() == v.toLowerCase())) return;
+    daftar.add(v);
+    await _p.setStringList('hidden_names', daftar);
+  }
+
+  Future<void> tampilkanSemuaNama() => _p.remove('hidden_names');
+
   // Kartu hutang di beranda: hitung ulang sendiri, atau tunggu ditekan.
   //
   // Menghitungnya berarti membaca setiap nota yang belum lunas, jadi makin

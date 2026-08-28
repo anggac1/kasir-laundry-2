@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../db/db.dart';
 import '../models/models.dart';
-import '../print/printer_service.dart';
 import '../store/settings.dart';
 import '../ui/umum.dart';
 import '../utils/fmt.dart';
 import 'beranda.dart' show LencanaBayar;
+import 'dialog_cetak.dart';
 import 'nota_baru.dart';
 import 'pratinjau.dart';
 
@@ -90,9 +90,7 @@ class _NotaDetailScreenState extends State<NotaDetailScreen> {
     final lanjut = await tampilkanPratinjau(context, n);
     if (!lanjut || !mounted) return;
     pesan(context, 'Menghubungkan ke printer...');
-    final hasil = await PrinterService.instance.cetakNota(n);
-    if (!mounted) return;
-    pesan(context, hasil.pesan, galat: !hasil.sukses);
+    await cetakDenganPemulihan(context, n);
   }
 
   Future<void> _pratinjau() async {

@@ -191,7 +191,7 @@ const _mulai = <_Butir>[
     langkah: [
       'Nyalakan printer, pastikan kertasnya terpasang',
       'Buka Setelan Bluetooth di HP, pasangkan dengan printer Anda',
-      'Kembali ke aplikasi: Pengaturan, lalu Pilih printer',
+      'Kembali ke aplikasi: menu titik tiga, pilih Printer',
       'Tekan Izinkan Bluetooth bila diminta',
       'Pilih printer dari daftar, lalu Tes Cetak Contoh',
     ],
@@ -227,9 +227,9 @@ const _mulai = <_Butir>[
   _Butir(
     'Yang wajib diisi, dan yang tidak',
     ikon: Icons.check_circle_outline,
-    isi: 'Sengaja hanya dua hal yang wajib. Sisanya boleh dilewati, dan '
-        'baris yang kosong tidak akan tercetak di struk sehingga kertas '
-        'tidak terbuang.',
+    isi: 'Isian wajib ditandai bintang merah, seperti di formulir online. '
+        'Sisanya boleh dilewati, dan baris yang kosong tidak akan tercetak '
+        'di struk sehingga kertas tidak terbuang.',
     catatan: 'WAJIB\n'
         '  Nama pelanggan\n'
         '  Minimal satu baris item\n\n'
@@ -273,6 +273,21 @@ const _masalah = <_Butir>[
     ],
     catatan: 'Kalau muncul dialog Cetak Gagal, di dalamnya ada rincian tiap '
         'langkah. Bagian itu yang menunjukkan di mana persisnya berhenti.',
+  ),
+  _Butir(
+    'Printer bermasalah pas mau mencetak',
+    ikon: Icons.print_disabled,
+    isi: 'Sudah mengisi nota, tekan cetak, ternyata Bluetooth mati atau '
+        'printer tidak menyambung. Nota tidak akan hilang.',
+    langkah: [
+      'Nota sudah tersimpan otomatis sebelum mencetak',
+      'Di dialog yang muncul, tekan Setelan Bluetooth',
+      'Nyalakan Bluetooth atau pasangkan printernya',
+      'Tekan tombol kembali di HP',
+      'Tekan Coba Cetak Lagi, tanpa mengisi ulang apa pun',
+    ],
+    catatan: 'Kalau memilih Nanti Saja, notanya tetap tersimpan dan bisa '
+        'dicetak kapan saja dari daftar di beranda.',
   ),
   _Butir(
     'Satu baris jadi dua baris di kertas',
@@ -344,10 +359,24 @@ const _lanjutan = <_Butir>[
     catatan: 'Tag di awal baris:\n'
         '[L] [C] [R]  rata kiri, tengah, kanan\n'
         '[B]  tebal\n'
-        '[H]  huruf dua kali besar\n\n'
+        '[H]  huruf dua kali besar\n'
+        '[C3] angka berarti ukuran huruf, 1 sampai 8\n\n'
         'Tag di tengah baris:\n'
         '[>]  dorong sisanya ke kanan\n\n'
         'Baris berisi --- menjadi garis pemisah.',
+  ),
+  _Butir(
+    'Mengatur ukuran huruf',
+    ikon: Icons.format_size,
+    isi: 'Tambahkan angka di dalam tag untuk mengatur besar huruf. Angka 1 '
+        'sampai 8, dan 1 berarti ukuran biasa.',
+    catatan: '[C2]LAUNDRY JAYA   tengah, dua kali besar\n'
+        '[BC3]LUNAS           tebal, tengah, tiga kali\n'
+        '[R2]Rp50.000        kanan, dua kali\n\n'
+        'Baris tanpa angka tetap berukuran biasa, jadi template lama tidak '
+        'perlu diubah. [H] sendiri masih berarti dua kali besar.\n\n'
+        'Ingat, huruf makin besar berarti makin sedikit yang muat: pada '
+        'kertas 32 kolom, ukuran 2 hanya muat 16 huruf, ukuran 3 muat 10.',
   ),
   _Butir(
     'Menyembunyikan baris yang kosong',
@@ -358,6 +387,17 @@ const _lanjutan = <_Butir>[
         'Baris itu hilang sendiri kalau Anda tidak mengisi uang yang '
         'diterima. Sama untuk [?kembalian], [?estimasi], dan '
         '[?status_bayar].',
+  ),
+  _Butir(
+    'Saran nama pelanggan',
+    ikon: Icons.person_search_outlined,
+    isi: 'Mengetik nama akan memunculkan saran dari nota yang pernah dibuat, '
+        'jadi pelanggan langganan tidak perlu diketik ulang.',
+    catatan: 'Kalau ada nama yang salah ketik dan mengganggu, tekan silang '
+        'di sebelah kanannya. Nama itu tidak disarankan lagi, tapi notanya '
+        'tetap utuh dan tetap bisa dicari di beranda.\n\n'
+        'Untuk mengembalikan semuanya: Pengaturan, bagian Beranda, '
+        'Saran nama pelanggan, tekan Tampilkan.',
   ),
   _Butir(
     'Membuat field sendiri',

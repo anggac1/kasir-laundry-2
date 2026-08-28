@@ -95,6 +95,7 @@ class _LayananScreenState extends State<LayananScreen> {
                       prefixText: 'Rp ',
                     ),
                   ),
+                  TombolNol(controller: hargaCtrl),
                   const SizedBox(height: 4),
                   SwitchListTile(
                     value: aktif,

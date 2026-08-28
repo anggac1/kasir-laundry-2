@@ -93,6 +93,15 @@ jobs:
           cp -r /tmp/simpan/lib .
           cp /tmp/simpan/pubspec.yaml .
           cp android_overrides/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+          # MainActivity buatan sendiri: menyediakan jalan membuka Setelan
+          # Bluetooth langsung dari aplikasi.
+          KT=$(find android/app/src/main/kotlin -name MainActivity.kt | head -1)
+          if [ -n "$KT" ]; then
+            cp android_overrides/MainActivity.kt "$KT"
+            echo "MainActivity.kt dipasang di $KT"
+          else
+            echo "PERINGATAN: MainActivity.kt bawaan tidak ditemukan"
+          fi
 
       # Tambalan HARUS diletakkan di ATAS android/build.gradle.
       # Kalau ditaruh di bawah, Gradle menolak dengan pesan
