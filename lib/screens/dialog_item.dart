@@ -80,8 +80,7 @@ Future<ItemNota?> dialogQtyLayanan(
       ),
     );
   } finally {
-    qtyCtrl.dispose();
-    hargaCtrl.dispose();
+    buangNanti([qtyCtrl, hargaCtrl]);
   }
 }
 
@@ -199,9 +198,6 @@ Future<ItemNota?> dialogItemManual(
       ),
     );
   } finally {
-    namaCtrl.dispose();
-    qtyCtrl.dispose();
-    satuanCtrl.dispose();
-    hargaCtrl.dispose();
+    buangNanti([namaCtrl, qtyCtrl, satuanCtrl, hargaCtrl]);
   }
 }

@@ -22,6 +22,13 @@ dependencies:
 
 dev_dependencies:
   flutter_lints: ^3.0.0
+  # Hanya dipakai alat/terapkan_merek.dart saat build, untuk mengubah
+  # ukuran logo jadi ikon peluncur. Tidak ikut masuk ke dalam APK.
+  image: ^4.1.7
 
 flutter:
   uses-material-design: true
+  # Logo dan nama aplikasi dibaca dari folder ini saat aplikasi start.
+  # Folder boleh kosong; lihat assets/merek/BACA_INI.txt.
+  assets:
+    - assets/merek/

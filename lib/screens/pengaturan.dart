@@ -4,7 +4,10 @@ import '../db/db.dart';
 import '../store/settings.dart';
 import '../ui/umum.dart';
 import 'ekspor_screen.dart';
-import 'printer_setup.dart';
+
+// Nama tingkat ketajaman dan kecepatan, dipakai di chip dan subtitle.
+const _namaKetajaman = ['Normal', 'Tebal', 'Lebih tebal', 'Paling tebal'];
+const _namaKelambatan = ['Cepat', 'Sedang', 'Pelan'];
 
 class PengaturanScreen extends StatefulWidget {
   const PengaturanScreen({super.key});
@@ -89,6 +92,28 @@ class _PengaturanScreenState extends State<PengaturanScreen> {
     pesan(context, 'Semua nota dihapus.');
   }
 
+  // #Mengubah lebar kertas, sekaligus menjaga Font B tetap masuk akal
+  //
+  // Font B hanya benar pada 42 kolom. Lebar berapa pun selain itu berarti
+  // Font A, jadi sakelarnya dimatikan sendiri daripada dibiarkan menyala
+  // dan membuat struk melipat tanpa sebab yang jelas.
+  Future<void> _ubahLebar(int lebar) async {
+    final s = Settings.instance;
+    final fontBSebelum = s.fontKecil;
+    await s.setLebarKertas(lebar);
+    if (lebar == 42 && !s.fontKecil) {
+      await s.setFontKecil(true);
+    } else if (lebar != 42 && s.fontKecil) {
+      await s.setFontKecil(false);
+    }
+    if (!mounted) return;
+    setState(() {});
+    if (fontBSebelum != s.fontKecil) {
+      pesan(context,
+          s.fontKecil ? 'Font B ikut dinyalakan.' : 'Font B ikut dimatikan.');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -131,24 +156,12 @@ class _PengaturanScreenState extends State<PengaturanScreen> {
             ),
           ),
           const Divider(),
-          _seksi('Printer'),
-          ListTile(
-            leading: const Icon(Icons.bluetooth),
-            title: const Text('Pilih printer'),
-            subtitle: Text(s.printerNama ?? 'Belum dipilih'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const PrinterSetupScreen()),
-              );
-              if (mounted) setState(() {});
-            },
-          ),
+          _seksi('Kertas dan Huruf'),
           ListTile(
             leading: const Icon(Icons.straighten),
             title: const Text('Lebar kertas'),
-            subtitle: Text('${s.lebarKertas} karakter per baris'),
+            subtitle: Text('${s.lebarKertas} karakter per baris  -  '
+                '${s.keteranganKertas}'),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -157,10 +170,7 @@ class _PengaturanScreenState extends State<PengaturanScreen> {
                   tooltip: 'Kurangi satu',
                   onPressed: s.lebarKertas <= kLebarMin
                       ? null
-                      : () async {
-                          await s.setLebarKertas(s.lebarKertas - 1);
-                          if (mounted) setState(() {});
-                        },
+                      : () => _ubahLebar(s.lebarKertas - 1),
                 ),
                 Text('${s.lebarKertas}',
                     style: const TextStyle(
@@ -170,10 +180,7 @@ class _PengaturanScreenState extends State<PengaturanScreen> {
                   tooltip: 'Tambah satu',
                   onPressed: s.lebarKertas >= kLebarMaks
                       ? null
-                      : () async {
-                          await s.setLebarKertas(s.lebarKertas + 1);
-                          if (mounted) setState(() {});
-                        },
+                      : () => _ubahLebar(s.lebarKertas + 1),
                 ),
               ],
             ),
@@ -184,9 +191,10 @@ class _PengaturanScreenState extends State<PengaturanScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Patokan: 58mm = 32, 80mm = 48. Kalau baris yang di layar '
-                  'terlihat muat ternyata melipat di kertas, turunkan satu '
-                  'angka jadi 31, lalu 30 bila masih melipat.',
+                  'Patokan Font A: 58mm = 32, 80mm = 48. '
+                  'Font B: 58mm = 42.\n'
+                  'Kalau baris yang di layar terlihat muat ternyata melipat '
+                  'di kertas, turunkan satu angka jadi 31, lalu 30.',
                   style: TextStyle(fontSize: 12, color: Colors.grey),
                 ),
                 const SizedBox(height: 8),
@@ -196,10 +204,7 @@ class _PengaturanScreenState extends State<PengaturanScreen> {
                     for (final n in const [30, 31, 32, 42, 48])
                       ActionChip(
                         label: Text('$n'),
-                        onPressed: () async {
-                          await s.setLebarKertas(n);
-                          if (mounted) setState(() {});
-                        },
+                        onPressed: () => _ubahLebar(n),
                       ),
                   ],
                 ),
@@ -210,12 +215,22 @@ class _PengaturanScreenState extends State<PengaturanScreen> {
             secondary: const Icon(Icons.text_decrease),
             value: s.fontKecil,
             title: const Text('Font kecil (Font B)'),
-            subtitle: const Text(
-                'Huruf lebih rapat, muat 42 karakter per baris. '
-                'Ingat ubah juga Lebar kertas jadi 42.'),
+            subtitle: Text(s.fontKecil
+                ? 'Aktif. Huruf lebih rapat, kertas 58mm muat 42 karakter.'
+                : 'Huruf lebih rapat, kertas 58mm muat 42 karakter '
+                    'daripada 32.'),
+            // Dua arah: menyalakan Font B membawa lebar ke 42, mematikannya
+            // mengembalikan ke 32. Arah sebaliknya diurus _ubahLebar.
             onChanged: (v) async {
               await s.setFontKecil(v);
-              if (mounted) setState(() {});
+              await s.setLebarKertas(v ? 42 : 32);
+              if (!mounted) return;
+              setState(() {});
+              pesan(
+                  context,
+                  v
+                      ? 'Font B aktif, lebar kertas jadi 42.'
+                      : 'Font A aktif, lebar kertas jadi 32.');
             },
           ),
           ListTile(
@@ -231,6 +246,97 @@ class _PengaturanScreenState extends State<PengaturanScreen> {
               setState(() {});
               pesan(context, 'Setelan printer dikembalikan ke bawaan.');
             },
+          ),
+          _seksi('Kalau Hasil Cetak Pudar'),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Text(
+              'Dua setelan berikut hanya perlu diubah kalau tulisan di '
+              'kertas terlihat tipis atau abu-abu. Coba yang pertama dulu; '
+              'kalau belum cukup, baru yang kedua.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.opacity),
+            title: const Text('1. Ketebalan tulisan'),
+            subtitle: Text('Sekarang: ${_namaKetajaman[s.ketajamanCetak]}'),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Makin tebal, makin hitam hasilnya. Printer memanaskan '
+                  'tiap titik dua kali dalam satu lintasan, jadi tulisannya '
+                  'tidak mungkin bergeser.\n'
+                  'Efek samping: mencetak sedikit lebih lama dan baterai '
+                  'printer lebih cepat habis.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  children: [
+                    for (var i = 0; i < _namaKetajaman.length; i++)
+                      ChoiceChip(
+                        label: Text(_namaKetajaman[i]),
+                        selected: s.ketajamanCetak == i,
+                        onSelected: (_) async {
+                          await s.setKetajamanCetak(i);
+                          if (mounted) setState(() {});
+                        },
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.speed),
+            title: const Text('2. Kecepatan cetak'),
+            subtitle: Text('Sekarang: ${_namaKelambatan[s.kelambatanCetak]}'),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Mencetak lebih pelan memberi kertas waktu lebih lama '
+                  'untuk menghitam. Pakai ini kalau Ketebalan sudah Paling '
+                  'tebal tapi hasilnya masih pudar.\n'
+                  'Efek samping: struk lebih lama keluar.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  children: [
+                    for (var i = 0; i < _namaKelambatan.length; i++)
+                      ChoiceChip(
+                        label: Text(_namaKelambatan[i]),
+                        selected: s.kelambatanCetak == i,
+                        onSelected: (_) async {
+                          await s.setKelambatanCetak(i);
+                          if (mounted) setState(() {});
+                        },
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Tidak semua printer mengenal dua setelan ini. Kalau '
+                  'setelah diubah struknya berisi huruf acak, kembalikan '
+                  'Ketebalan ke Normal dan Kecepatan ke Cepat.\n'
+                  'Coba dulu lewat Tes Cetak di layar Printer, biar tidak '
+                  'membuang nota pelanggan.',
+                  style: TextStyle(
+                      fontSize: 12, color: Colors.orange.shade900),
+                ),
+              ],
+            ),
           ),
           SwitchListTile(
             secondary: const Icon(Icons.content_cut),
@@ -291,13 +397,10 @@ class _PengaturanScreenState extends State<PengaturanScreen> {
           const Padding(
             padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: Text(
-              'Ini hanya nilai bawaan. Tiap nota punya kolom "Jumlah lembar '
-              'dicetak" sendiri yang menimpanya, jadi Anda bisa mencetak '
-              '1 lembar untuk satu pelanggan dan 2 lembar untuk yang lain '
-              'tanpa mengubah setelan ini.\n\n'
-              'Lembar pertama memakai judul pertama, lembar kedua memakai '
-              'judul kedua, dan seterusnya. Letakkan {salinan} di template '
-              'struk agar judulnya ikut tercetak.',
+              'Hanya nilai bawaan. Tiap nota punya kolom "Jumlah lembar '
+              'dicetak" sendiri yang menimpanya.\n\n'
+              'Judul dipakai berurutan: lembar 1 judul 1, lembar 2 judul 2. '
+              'Pasang {salinan} di template agar ikut tercetak.',
               style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ),
@@ -307,9 +410,8 @@ class _PengaturanScreenState extends State<PengaturanScreen> {
           const Padding(
             padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: Text(
-              'Buat kolom isian sendiri, misalnya Parfum atau Jenis Cucian. '
-              'Kolomnya muncul saat membuat nota, dan otomatis jadi '
-              'placeholder yang bisa dipasang di template struk.',
+              'Kolom isian sendiri, misalnya Parfum. Muncul saat membuat '
+              'nota, dan jadi placeholder untuk template struk.',
               style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ),
@@ -402,12 +504,10 @@ class _PengaturanScreenState extends State<PengaturanScreen> {
           const Padding(
             padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: Text(
-              'Menghitung angka hutang berarti membaca setiap nota yang '
-              'belum lunas, jadi makin lama makin berat. Selama nota Anda '
-              'masih di bawah sekitar 50.000, biarkan Auto — bedanya tidak '
-              'terasa. Kalau sudah menumpuk dan beranda mulai lambat dibuka, '
-              'pindah ke Manual. Tombol perbarui akan muncul di beranda, '
-              'dengan titik kecil saat angkanya sudah berubah.',
+              'Menghitung hutang membaca semua nota belum lunas, jadi makin '
+              'lama makin berat. Di bawah 50.000 nota, biarkan Auto.\n\n'
+              'Kalau beranda mulai lambat, pindah ke Manual. Tombol perbarui '
+              'muncul di beranda, bertitik saat angkanya berubah.',
               style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ),

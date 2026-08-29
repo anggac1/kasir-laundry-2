@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../db/db.dart';
 import '../print/receipt.dart';
 import '../store/settings.dart';
+import 'pratinjau.dart';
 import '../ui/umum.dart';
 
 // Editor template struk. Pengguna sendiri yang menentukan mana teks tetap
@@ -110,6 +111,154 @@ class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
     });
   }
 
+  // Lima laci simpanan. Membuka lembar ini tidak mengubah apa pun sampai
+  // pengguna menekan Simpan atau Pakai di salah satu barisnya.
+  Future<void> _laci() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLembar) {
+          final s = Settings.instance;
+          final nama = s.namaSimpanan;
+          return SafeArea(
+            child: Padding(
+              // Papan ketik tidak boleh menutupi baris paling bawah.
+              padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(ctx).viewInsets.bottom),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(16, 16, 16, 4),
+                    child: Text('Template Tersimpan',
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w700)),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: Text(
+                      'Lima laci untuk menyimpan template yang sudah jadi. '
+                      'Simpan menaruh template yang sedang dibuka ke laci; '
+                      'Pakai menimpa yang sedang dibuka dengan isi laci.',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  for (var i = 0; i < Settings.kMaksSimpanan; i++)
+                    ListTile(
+                      leading: CircleAvatar(
+                        radius: 14,
+                        child: Text('${i + 1}',
+                            style: const TextStyle(fontSize: 12)),
+                      ),
+                      title: Text(
+                        s.laciTerisi(i) ? nama[i] : 'Laci ${i + 1} kosong',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: s.laciTerisi(i) ? null : Colors.grey.shade600,
+                          fontStyle: s.laciTerisi(i)
+                              ? FontStyle.normal
+                              : FontStyle.italic,
+                        ),
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (s.laciTerisi(i)) ...[
+                            TextButton(
+                              onPressed: () async {
+                                await _pakaiLaci(i, nama[i]);
+                                if (ctx.mounted) Navigator.pop(ctx);
+                              },
+                              child: const Text('Pakai'),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline, size: 20),
+                              tooltip: 'Kosongkan laci',
+                              color: Theme.of(ctx).colorScheme.error,
+                              onPressed: () async {
+                                await _hapusLaci(i, nama[i]);
+                                setLembar(() {});
+                              },
+                            ),
+                          ] else
+                            const SizedBox(width: 8),
+                          TextButton(
+                            onPressed: () async {
+                              await _simpanKeLaci(i, nama[i]);
+                              setLembar(() {});
+                            },
+                            child: Text(s.laciTerisi(i) ? 'Timpa' : 'Simpan'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // #Menaruh template yang sedang dibuka ke laci, setelah diberi nama
+  Future<void> _simpanKeLaci(int i, String namaLama) async {
+    final nama = await dialogIsian(
+      context,
+      judul: 'Simpan ke laci ${i + 1}',
+      awal: namaLama.isEmpty ? '' : namaLama,
+      label: 'Nama template',
+      bantuan: 'Misalnya: Struk 58mm, atau Versi hemat kertas',
+    );
+    if (nama == null) return;
+    // Yang disimpan adalah isi kotak teks, bukan yang tersimpan di
+    // pengaturan, supaya perubahan yang belum ditekan Simpan ikut terbawa.
+    final s = Settings.instance;
+    await s.setTemplate(_utama.text);
+    await s.setTemplateItem(_item.text);
+    await s.simpanKeLaci(i, nama);
+    if (!mounted) return;
+    pesan(context, 'Tersimpan ke laci ${i + 1}.');
+  }
+
+  // #Menimpa template yang sedang dibuka dengan isi laci
+  Future<void> _pakaiLaci(int i, String nama) async {
+    final ya = await konfirmasiHapus(
+      context,
+      judul: 'Pakai "$nama"?',
+      isi: 'Template yang sedang dibuka akan ditimpa. Kalau belum '
+          'tersimpan di laci lain, isinya hilang.',
+      tombol: 'Pakai',
+    );
+    if (!ya) return;
+    await Settings.instance.muatDariLaci(i);
+    if (!mounted) return;
+    setState(() {
+      _utama.text = Settings.instance.template;
+      _item.text = Settings.instance.templateItem;
+    });
+    _refresh();
+    pesan(context, 'Template "$nama" dipakai.');
+  }
+
+  // #Mengosongkan laci
+  Future<void> _hapusLaci(int i, String nama) async {
+    final ya = await konfirmasiHapus(
+      context,
+      judul: 'Kosongkan laci ${i + 1}?',
+      isi: 'Template "$nama" dihapus dari laci. Yang sedang dibuka '
+          'tidak ikut berubah.',
+    );
+    if (!ya) return;
+    await Settings.instance.hapusLaci(i);
+    if (!mounted) return;
+    pesan(context, 'Laci ${i + 1} dikosongkan.');
+  }
+
   void _bantuan() {
     showDialog(
       context: context,
@@ -163,16 +312,21 @@ class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
   }
 
   // Pratinjau memakai teks yang sedang diketik, bukan yang sudah tersimpan.
-  String get _pratinjau {
+  //
+  // Hasilnya berupa daftar BarisStruk, bukan teks polos, supaya digambar
+  // oleh widget yang SAMA dengan pratinjau nota. Dua penggambar berbeda
+  // untuk satu template adalah sumber ketidakcocokan sebelumnya: yang di
+  // sini meratakan dengan spasi dan mengabaikan ukuran huruf, yang di
+  // sana memakai TextAlign dan membesarkan huruf sesuai skala.
+  List<BarisStruk>? get _barisPratinjau {
     final cfg = StrukConfig.dari(Settings.instance).salin(
       template: _utama.text,
       templateItem: _item.text,
     );
     try {
-      return Struk.pratinjau(
-          Struk.render(notaContoh(), cfg), cfg.lebarKertas);
-    } catch (e) {
-      return 'Template belum bisa ditampilkan.\n$e';
+      return Struk.render(notaContoh(), cfg);
+    } catch (_) {
+      return null;
     }
   }
 
@@ -188,6 +342,10 @@ class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
                 onPressed: _bantuan,
                 icon: const Icon(Icons.help_outline),
                 tooltip: 'Cara pakai'),
+            IconButton(
+                onPressed: _laci,
+                icon: const Icon(Icons.folder_open_outlined),
+                tooltip: 'Template tersimpan'),
             IconButton(
                 onPressed: _reset,
                 icon: const Icon(Icons.restart_alt),
@@ -314,25 +472,27 @@ class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
 
   Widget _tabPratinjau() {
     final s = Settings.instance;
+    final baris = _barisPratinjau;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         Text(
           'Contoh hasil pada kertas ${s.lebarKertas} karakter '
-          '(${s.lebarKertas == 32 ? '58mm' : '80mm'}).',
+          '(${s.keteranganKertas}). Tampilan ini sama persis dengan '
+          'pratinjau sebelum mencetak.',
           style: const TextStyle(fontSize: 12, color: Colors.grey),
         ),
         const SizedBox(height: 12),
-        KertasPutih(
-          child: Text(
-            _pratinjau,
-            style: const TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 12,
-                height: 1.4,
-                color: Colors.black),
-          ),
-        ),
+        if (baris == null)
+          KertasPutih(
+            child: Text(
+              'Template belum bisa ditampilkan.\n'
+              'Biasanya ada tag yang belum ditutup, misalnya [C tanpa ].',
+              style: TextStyle(fontSize: 12, color: Colors.red.shade700),
+            ),
+          )
+        else
+          KertasStruk(baris: baris, lebar: s.lebarKertas),
         const SizedBox(height: 16),
         OutlinedButton.icon(
           onPressed: () {

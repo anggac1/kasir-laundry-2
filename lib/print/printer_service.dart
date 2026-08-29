@@ -86,7 +86,7 @@ class PrinterService {
       _aman(
         () => minta ? p.request() : p.status,
         PermissionStatus.denied,
-        batas: minta ? _batasIzin : const Duration(seconds: 4),
+        batas: minta ? _batasIzin : const Duration(seconds: 2),
       );
 
   // Android 12+ memakai BLUETOOTH_CONNECT dan BLUETOOTH_SCAN, Android 11
@@ -129,11 +129,30 @@ class PrinterService {
     );
   }
 
+  // #Membuka tautan di peramban, lewat saluran yang sama
+  //
+  // Tidak butuh izin INTERNET: aplikasi hanya menyerahkan alamatnya ke
+  // Android, lalu peramban yang membukanya dengan izinnya sendiri.
+  Future<bool> bukaTautan(String alamat) {
+    const saluran = MethodChannel('kasir_laundry/setelan');
+    return _aman(
+      () async {
+        final ok = await saluran
+            .invokeMethod<bool>('bukaTautan', {'alamat': alamat});
+        return ok ?? false;
+      },
+      false,
+      batas: const Duration(seconds: 5),
+    );
+  }
+
   Future<bool> bluetoothAktif() =>
-      _aman(() => PrintBluetoothThermal.bluetoothEnabled, false);
+      _aman(() => PrintBluetoothThermal.bluetoothEnabled, false,
+          batas: const Duration(seconds: 3));
 
   Future<List<BluetoothInfo>> daftarPrinter() =>
-      _aman(() => PrintBluetoothThermal.pairedBluetooths, <BluetoothInfo>[]);
+      _aman(() => PrintBluetoothThermal.pairedBluetooths, <BluetoothInfo>[],
+          batas: const Duration(seconds: 3));
 
   Future<void> putuskan() =>
       _aman(() => PrintBluetoothThermal.disconnect, false);
@@ -208,8 +227,14 @@ class PrinterService {
     var izin = await izinSudahAda();
     if (!izin && mintaIzinDulu) izin = await mintaIzin();
 
-    final menyala = await bluetoothAktif();
-    final perangkat = izin ? await daftarPrinter() : <BluetoothInfo>[];
+    // Dijalankan berbarengan, bukan berurutan: keduanya tidak saling
+    // bergantung, jadi menunggunya satu per satu hanya menjumlahkan waktu.
+    final hasil = await Future.wait([
+      bluetoothAktif(),
+      izin ? daftarPrinter() : Future.value(<BluetoothInfo>[]),
+    ]);
+    final menyala = hasil[0] as bool;
+    final perangkat = hasil[1] as List<BluetoothInfo>;
 
     final String catatan;
     if (!izin) {
@@ -323,6 +348,8 @@ class PrinterService {
         barisKosongAkhir: s.barisKosongAkhir,
         potongKertas: s.potongKertas,
         fontKecil: s.fontKecil,
+        ketajaman: s.ketajamanCetak,
+        kelambatan: s.kelambatanCetak,
       ));
     }
     return semua;

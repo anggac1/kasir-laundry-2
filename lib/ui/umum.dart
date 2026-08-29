@@ -46,6 +46,24 @@ Future<bool> konfirmasiHapus(
   return ya ?? false;
 }
 
+// Membuang controller setelah dialognya benar-benar lepas dari layar.
+//
+// showDialog selesai begitu Navigator.pop dipanggil, padahal animasi
+// menutupnya masih berjalan dan TextField di dalamnya masih mendengarkan
+// controller itu. Membuang controller saat itu juga membuat widget-nya
+// gagal melepas diri, dan Flutter berhenti dengan
+// "_dependents.isEmpty is not true".
+//
+// Jedanya dibuat lebih panjang daripada animasi penutupan dialog bawaan
+// Material yang sekitar 200 ms. Satu frame saja belum tentu cukup.
+void buangNanti(List<ChangeNotifier> daftar) {
+  Future<void>.delayed(const Duration(milliseconds: 600), () {
+    for (final c in daftar) {
+      c.dispose();
+    }
+  });
+}
+
 // Dialog satu kolom isian. Mengembalikan null bila dibatalkan.
 Future<String?> dialogIsian(
   BuildContext context, {
@@ -55,6 +73,7 @@ Future<String?> dialogIsian(
   String? bantuan,
   TextInputType? tipe,
   int maxBaris = 1,
+  TextCapitalization kapital = TextCapitalization.sentences,
 }) async {
   final ctrl = TextEditingController(text: awal);
   try {
@@ -66,6 +85,7 @@ Future<String?> dialogIsian(
           controller: ctrl,
           autofocus: true,
           keyboardType: tipe,
+          textCapitalization: kapital,
           maxLines: maxBaris,
           decoration: InputDecoration(labelText: label, helperText: bantuan),
         ),
@@ -82,7 +102,7 @@ Future<String?> dialogIsian(
       ),
     );
   } finally {
-    ctrl.dispose();
+    buangNanti([ctrl]);
   }
 }
 
@@ -364,22 +384,22 @@ class _KolomNamaState extends State<KolomNama> {
   }
 }
 
-// Tombol cepat menambah nol pada kolom angka.
+// Tombol cepat menambah tiga nol pada kolom angka.
 //
-// Mengetik 7 lalu menekan +000 jauh lebih cepat daripada mengetik 7000,
-// dan lebih kecil kemungkinan salah hitung nolnya. Hanya +0 dan +000
-// yang disediakan: +00 jarang dipakai dan hanya menambah tombol.
+// Hanya +000 yang disediakan. Angka 0 dan tombol hapus sudah ada di papan
+// ketik bawaan, jadi menaruhnya lagi di layar cuma memakan tempat.
 class TombolNol extends StatelessWidget {
   final TextEditingController controller;
   final VoidCallback? sesudah;
 
   const TombolNol({required this.controller, this.sesudah, super.key});
 
-  void _tambah(String nol) {
+  // #Menempel "000" di ujung angka yang sedang diketik
+  void _tambah() {
     final teks = controller.text.trim();
     // Tidak ada gunanya membuat "000" dari kolom kosong.
     if (teks.isEmpty || teks == '0') return;
-    final baru = teks + nol;
+    final baru = '${teks}000';
     controller
       ..text = baru
       ..selection = TextSelection.collapsed(offset: baru.length);
@@ -388,42 +408,19 @@ class TombolNol extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget tombol(String nol) => Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(right: 6),
-            child: OutlinedButton(
-              onPressed: () => _tambah(nol),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                minimumSize: const Size(0, 44),
-              ),
-              child: Text('+$nol',
-                  style: const TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w600)),
-            ),
-          ),
-        );
-
     return Padding(
       padding: const EdgeInsets.only(top: 6),
-      child: Row(
-        children: [
-          tombol('0'),
-          tombol('000'),
-          Expanded(
-            child: OutlinedButton(
-              onPressed: () {
-                controller.clear();
-                sesudah?.call();
-              },
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                minimumSize: const Size(0, 44),
-              ),
-              child: const Text('C', style: TextStyle(fontSize: 15)),
-            ),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: OutlinedButton(
+          onPressed: _tambah,
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+            minimumSize: const Size(0, 44),
           ),
-        ],
+          child: const Text('+000',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+        ),
       ),
     );
   }

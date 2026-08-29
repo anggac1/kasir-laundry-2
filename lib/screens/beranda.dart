@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../db/db.dart';
 import '../models/models.dart';
+import '../store/merek.dart';
 import '../store/settings.dart';
 import '../utils/fmt.dart';
 import 'layanan.dart';
@@ -94,7 +95,27 @@ class _BerandaScreenState extends State<BerandaScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Kasir Laundry'),
+        title: Row(
+          children: [
+            const LogoMerek(ukuran: 26),
+            const SizedBox(width: 10),
+            Expanded(
+              // Nama laundry yang panjang lebih baik mengecil daripada
+              // terpotong jadi "Laundry Bu Sri Seja...". Titik tiga tetap
+              // dipasang sebagai jaring pengaman: nama yang benar-benar
+              // panjang berhenti mengecil di sini, tidak sampai tak terbaca.
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 320),
+                  child: Text(Merek.instance.nama,
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                ),
+              ),
+            ),
+          ],
+        ),
         actions: [
           // Hanya muncul pada mode manual. Titik menandakan angkanya sudah
           // berubah sejak terakhir dihitung.
@@ -298,11 +319,16 @@ class _BerandaScreenState extends State<BerandaScreen> {
                           ),
                         ),
                       ),
-                      Text(
-                        'Belum dibayar  -  $jml nota',
-                        style: teks.bodySmall,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      // Dikecilkan kalau sempit, bukan dipotong: angka
+                      // notanya justru bagian yang paling perlu terbaca.
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Belum bayar - $jml nota',
+                          style: teks.bodySmall,
+                          maxLines: 1,
+                        ),
                       ),
                     ],
                   ),
@@ -393,11 +419,17 @@ class _BerandaScreenState extends State<BerandaScreen> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  Text(
-                    '${n.kode}  -  ${tanggal(n.dibuat)}',
-                    style: teks.bodySmall?.copyWith(color: Colors.grey.shade600),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  // Nomor nota dan tanggal dua-duanya dipakai mencari,
+                  // jadi dikecilkan saja daripada ada yang hilang.
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '${n.kode} - ${tanggal(n.dibuat)}',
+                      style:
+                          teks.bodySmall?.copyWith(color: Colors.grey.shade600),
+                      maxLines: 1,
+                    ),
                   ),
                 ],
               ),

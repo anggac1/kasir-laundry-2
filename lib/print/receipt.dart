@@ -143,9 +143,14 @@ class Struk {
     return hasil;
   }
 
-  // Pratinjau teks polos untuk editor template. Perataan dikerjakan
-  // dengan spasi supaya tampak seperti hasil cetak sungguhan.
-  static String pratinjau(List<BarisStruk> baris, int lebar) {
+  // Meratakan baris siap cetak menjadi teks polos.
+  //
+  // Dipakai untuk berbagi nota lewat chat. Ukuran huruf hilang di sini
+  // karena teks biasa tidak mengenalnya; yang dipertahankan perataan dan
+  // lebar kolomnya. Hanya ada SATU fungsi ini supaya tidak ada dua
+  // aturan yang perlahan berbeda.
+  static String pratinjau(List<BarisStruk> baris, int lebar,
+      {bool rapikan = false}) {
     final buf = StringBuffer();
     for (final b in baris) {
       final efektif = lebarEfektif(lebar, b.skala);
@@ -157,9 +162,10 @@ class Struk {
       } else if (b.rata == EscPos.rataKanan) {
         t = ' ' * (efektif - t.length) + t;
       }
-      buf.writeln(t);
+      buf.writeln(rapikan ? t.trimRight() : t);
     }
-    return buf.toString();
+    final hasil = buf.toString();
+    return rapikan ? hasil.trimRight() : hasil;
   }
 
   // Huruf berskala 2 memakan dua kali lebar, jadi kolomnya tinggal separuh.

@@ -262,49 +262,52 @@ Folder `android/` juga tidak ikut — kerangkanya dibuat ulang otomatis oleh Flu
 
 ## 5. Mengganti Nama dan Logo
 
-Bawaannya memakai logo Flutter dengan nama **Kasir Laundry**. Ini sengaja, supaya build tidak pernah gagal walau Anda belum menyiapkan gambar sendiri.
+Nama aplikasi dan logonya diambil dari **satu berkas gambar** di folder `assets/merek/`. Nama berkasnya menjadi nama aplikasi, jadi keduanya diganti sekaligus tanpa menyentuh kode.
 
-### Nama di bawah ikon
+### Caranya
 
-Berkas `android_overrides/AndroidManifest.xml`:
+1. Buka folder `assets/merek/`
+2. Taruh satu berkas gambar di situ, misalnya `Kasir Melati.png`
+3. Jalankan ulang lewat `jalankan.bat`, atau build APK baru lewat `push_ke_github.bat`
 
-```xml
-android:label="Kasir Laundry"
-```
+Hasilnya: judul di pojok kiri atas berubah menjadi **Kasir Melati**, dengan gambar itu sebagai logo di sebelahnya.
 
-### Judul di dalam aplikasi
+### Aturan penamaan
 
-Berkas `lib/main.dart`:
+**Ekstensi tidak ikut terbaca.** Berkas `Kasir Melati.png` menghasilkan nama `Kasir Melati`, bukan `Kasir Melati.png`. Jadi beri nama berkasnya persis seperti nama aplikasi yang Anda mau, termasuk spasi dan huruf besar-kecilnya.
 
-```dart
-title: 'Kasir Laundry',
-```
+| Nama berkas | Nama aplikasi |
+|---|---|
+| `Kasir Melati.png` | Kasir Melati |
+| `Laundry Bu Sri.jpg` | Laundry Bu Sri |
+| `LaundryKu.webp` | LaundryKu |
+
+Format yang didukung: `png`, `jpg`, `jpeg`, `webp`, `gif`, `bmp`. Ukuran yang enak dilihat 512 x 512 piksel; `png` berlatar transparan paling rapi.
+
+Kalau di folder itu ada lebih dari satu gambar, yang dipakai adalah yang paling awal secara alfabet. Kalau foldernya kosong, aplikasi memakai bawaannya: logo Flutter dengan nama **Kasir Laundry**. Berkas `BACA_INI.txt` di dalamnya diabaikan, jadi boleh dibiarkan.
+
+### Apa saja yang ikut berubah
+
+Satu berkas mengurus **tiga** hal sekaligus, otomatis, tanpa langkah tambahan:
+
+| Yang berubah | Kapan diterapkan |
+|---|---|
+| Judul di dalam aplikasi | Saat aplikasi dibuka |
+| Logo di pojok kiri atas | Saat aplikasi dibuka |
+| Nama di bawah ikon pada layar HP | Saat build |
+| Ikon aplikasi pada layar HP | Saat build |
+
+Dua yang terakhir dikerjakan `alat/terapkan_merek.dart`, yang dipanggil sendiri oleh `setup_lokal.bat` dan GitHub Actions setiap kali folder `android/` dibuat ulang. Ikonnya dibuat ulang dalam lima ukuran (48 sampai 192 piksel) dari gambar yang sama, jadi tidak perlu menyiapkan lima berkas sendiri.
+
+Kalau `assets/merek/` kosong atau tidak ada, script itu tidak mengubah apa pun dan aplikasi memakai bawaannya.
 
 ### Warna tema
 
-Juga di `lib/main.dart`. Seluruh warna aplikasi diturunkan otomatis dari satu warna ini:
+Di `lib/main.dart`. Seluruh warna aplikasi diturunkan otomatis dari satu warna ini:
 
 ```dart
 ColorScheme.fromSeed(seedColor: const Color(0xFF00695C))
 ```
-
-### Logo
-
-Ikon ada di `android/app/src/main/res/`, tersebar di lima folder menurut kerapatan layar:
-
-| Folder | Ukuran |
-|---|---|
-| `mipmap-mdpi` | 48 x 48 |
-| `mipmap-hdpi` | 72 x 72 |
-| `mipmap-xhdpi` | 96 x 96 |
-| `mipmap-xxhdpi` | 144 x 144 |
-| `mipmap-xxxhdpi` | 192 x 192 |
-
-Di tiap folder ada `ic_launcher.png`. Timpa kelimanya, ukurannya harus persis.
-
-Cara praktis membuat kelima ukuran sekaligus: [icon.kitchen](https://icon.kitchen), unggah gambar, unduh hasilnya, salin isi foldernya.
-
-> **Peringatan.** Folder `android/` dibuat ulang otomatis setiap build GitHub Actions dan setiap `jalankan.bat` berjalan di folder baru. Artinya **ikon yang Anda timpa akan hilang** saat itu terjadi. Kalau sudah mantap dengan logonya, beri tahu saya — ikonnya perlu disimpan di `android_overrides/` supaya ikut disalin otomatis seperti AndroidManifest.
 
 ---
 
@@ -314,7 +317,7 @@ Cara praktis membuat kelima ukuran sekaligus: [icon.kitchen](https://icon.kitche
 
 **Nota baru** — pilih layanan dari daftar, atau isi baris manual untuk hal yang tidak punya tarif tetap seperti hutang, saldo titipan, atau tambahan pemutih. Satuan bebas diketik, boleh juga dikosongkan.
 
-Nama pelanggan memberi saran dari nota yang pernah dibuat, jadi pelanggan langganan tidak perlu diketik ulang. Kolom harga punya tombol `+0`, `+00`, `+000` supaya tidak perlu menghitung nol satu per satu.
+Nama pelanggan memberi saran dari nota yang pernah dibuat, jadi pelanggan langganan tidak perlu diketik ulang. Kolom harga punya tombol `+000` supaya tidak perlu menghitung nol satu per satu: ketik `7`, tekan tombolnya, jadi `7000`.
 
 **Layanan** — daftar tarif. Sudah terisi sepuluh contoh, silakan ubah atau hapus.
 
@@ -357,6 +360,23 @@ Baris berisi `---` menjadi garis pemisah selebar kertas.
 Tag `[?kunci]` yang menghemat kertas. Baris `[?uang]Tunai[>]{uang}` hanya tercetak kalau Anda benar-benar mengisi uang yang diterima. Kalau dikosongkan, barisnya hilang sama sekali.
 
 Daftar lengkap placeholder ada di dalam aplikasi, di layar Template Struk.
+
+---
+
+### Menyimpan template (5 laci)
+
+Di halaman Template Struk ada ikon folder di kanan atas. Isinya lima laci untuk menyimpan template yang sudah jadi, supaya bisa bereksperimen tanpa takut kehilangan yang sedang dipakai.
+
+| Tombol | Artinya |
+|---|---|
+| **Simpan** | Menaruh template yang sedang dibuka ke laci itu, lalu diberi nama |
+| **Timpa** | Sama, tapi laci itu sudah berisi — isinya diganti |
+| **Pakai** | Kebalikannya: isi laci menimpa template yang sedang dibuka |
+| Ikon tong sampah merah | Mengosongkan laci. Yang sedang dibuka tidak ikut berubah |
+
+Yang tersimpan adalah **isi kotak teks saat itu**, termasuk perubahan yang belum ditekan Simpan. Dibatasi lima karena tiap laci menyimpan dua template utuh, dan daftar yang lebih panjang justru menyulitkan memilih.
+
+Baik **Pakai** maupun **Kosongkan** memunculkan konfirmasi lebih dulu, karena keduanya menimpa atau menghapus.
 
 ---
 
@@ -479,6 +499,103 @@ Perhitungan dengan asumsi seribu nota per bulan.
 
 ---
 
+## 11b. Menguji dengan Data Banyak
+
+Aplikasi ini datang dengan alat pembuat data uji di `alat/buat_dummy.py`. Gunanya satu: melihat sendiri apakah aplikasi masih enteng saat notanya sudah ratusan ribu, tanpa harus mengetik nota satu per satu.
+
+> **Data uji ini tidak ikut ke mana-mana.** Berkas `.db` hasilnya sudah masuk `.gitignore`, jadi tidak akan terunggah ke GitHub. Tidak ada satu pun `.bat` yang memanggilnya, dan GitHub Actions tidak tahu-menahu tentangnya. APK yang Anda pasang di HP tetap kosong seperti biasa.
+
+### Cara pakai
+
+Butuh Python 3 di laptop. Buka CMD di folder proyek:
+
+```
+python alat/buat_dummy.py 100000
+```
+
+Pilihan lain:
+
+| Perintah | Hasil |
+|---|---|
+| `python alat/buat_dummy.py` | 100.000 nota, bawaan |
+| `python alat/buat_dummy.py 1000000` | 1 juta nota |
+| `python alat/buat_dummy.py 5000 --keluar coba.db` | 5.000 nota, nama berkas sendiri |
+| `python alat/buat_dummy.py 50000 --besar` | harga belasan digit, untuk menguji batas angka |
+
+Datanya acak tapi **tidak berubah-ubah**: `--seed` yang sama selalu menghasilkan isi yang sama, jadi hasil pengukuran bisa dibandingkan antar percobaan.
+
+### Memasukkannya ke emulator
+
+```
+adb push dummy.db /data/local/tmp/laundry.db
+adb shell "run-as id.laundry.laundry_pos cp /data/local/tmp/laundry.db databases/laundry.db"
+```
+
+Lalu buka aplikasinya. Untuk kembali bersih, copot aplikasinya dari emulator lalu pasang lagi.
+
+### Hasil pengukuran
+
+Diukur sungguhan, bukan perkiraan:
+
+| Jumlah nota | Item | Ukuran berkas | Waktu membuat |
+|---|---|---|---|
+| 100.000 | 210.000 | 25 MB | 2 detik |
+| 1.000.000 | 2.100.000 | 265 MB | 20 detik |
+
+Kecepatan kueri pada database 1 juta nota:
+
+| Yang dikerjakan | Waktu |
+|---|---|
+| Beranda, 50 nota terbaru | 0,08 ms |
+| Kartu belum lunas | 17 ms |
+| Saran nama pelanggan | 11 ms |
+| Nomor nota berikutnya | 0,01 ms |
+| Membuka item satu nota | 0,01 ms |
+
+Artinya beranda tetap terbuka seketika di 1 juta nota. Yang paling berat adalah kartu belum lunas, 17 ms, dan itu pun hanya dihitung ulang saat perlu karena ada pengaturan Auto/Manual.
+
+### Soal batas angka: apakah `int` cukup?
+
+Pertanyaannya beralasan, karena `int` 32-bit memang mentok di 2,1 miliar. Tapi masalahnya tidak ada di sini, dan tidak perlu diubah apa pun:
+
+**Di database.** `INTEGER` pada SQLite bukan 4 byte tetap. SQLite memilih sendiri lebarnya (1, 2, 3, 4, 6, atau 8 byte) menurut besar angkanya, sampai 9,2 triliun-triliun. Diukur langsung pada 50.000 nota:
+
+| Nilai `total` tiap nota | Ukuran per nota |
+|---|---|
+| Rp50.000 | 75,5 byte |
+| Rp2 miliar | 76,4 byte |
+| Rp9 triliun | 78,5 byte |
+| Rp9.223.372.036.854.775.807 (batas) | 80,4 byte |
+
+Jadi memakai angka raksasa hanya menambah sekitar **5 byte per nota**, dan itu pun hanya kalau angkanya memang sebesar itu. Nota Rp50.000 tetap memakan 75 byte. Tidak ada gunanya mengganti tipe kolom.
+
+**Di aplikasi.** `int` pada Dart di Android adalah **64-bit**, bukan 32-bit. Batasnya Rp9.223.372.036.854.775.807.
+
+**Di penjumlahan**, yang sebenarnya paling rawan. Ini titik yang benar-benar penting, karena `SUM(total)` tumbuh terus seiring jumlah nota:
+
+| | Rp | 32-bit | 64-bit |
+|---|---|---|---|
+| 100.000 nota | 17,4 miliar | **jebol** | aman |
+| 1 juta nota | 174 miliar | **jebol** | aman |
+
+Jadi kalau aplikasi ini memakai `int` 32-bit, ia sudah rusak di 100.000 nota. Karena Dart di Android 64-bit, batasnya baru tercapai setelah sekitar **369 triliun nota**. Pada 100 nota per hari, itu sekitar 101 juta abad.
+
+Mode `--besar` dibuat untuk membuktikannya: harga sengaja dinaikkan sampai belasan digit, dan `SUM(total)` mencapai 47% dari batas `int64` hanya dengan 50.000 nota — masih muat, dan angka terbesarnya tetap tercetak benar.
+
+**Kesimpulan: kolom tetap `INTEGER`, tidak ada yang perlu diubah.**
+
+### Perkiraan ukuran jangka panjang
+
+Sekitar 260 byte per nota, sudah termasuk item dan indeksnya:
+
+| Nota per hari | Setelah 5 tahun | Ukuran |
+|---|---|---|
+| 30 | 54.750 | 14 MB |
+| 100 | 182.500 | 45 MB |
+| 300 | 547.500 | 136 MB |
+
+---
+
 ## 12. Kalau Ada Yang Gagal
 
 ### Saat menyiapkan perkakas
@@ -509,8 +626,11 @@ Emulator belum menyala atau sudah mati. Jalankan `jalankan.bat`, tunggu sampai l
 **Emulator tidak ada di daftar**
 Buat dulu lewat Android Studio → **Tools** → **Device Manager** → **Create Virtual Device**.
 
-**`jalankan.bat` langsung selesai, `exited with code=0` dalam sedetik**
-Dijalankan lewat Code Runner di VS Code. Panel Output tidak bisa menerima ketikan, jadi script berhenti saat menunggu jawaban Anda. Klik dua kali berkasnya dari File Explorer, atau pakai Terminal VS Code lalu ketik `.\jalankan.bat`.
+**Aplikasi berhenti dengan `_dependents.isEmpty is not true`** — Terjadi saat menutup dialog harga. Penyebabnya `TextEditingController` dibuang di blok `finally` tepat setelah `showDialog` selesai, padahal dialognya masih menganimasikan penutupan dan `TextField` di dalamnya masih mendengarkan controller itu. Sudah diperbaiki: pembuangannya ditunda sampai animasinya benar-benar selesai.
+
+**`jalankan.bat` berhenti sendiri setelah "Menyimpan alamat itu ke pengaturan Flutter"** — Bug di versi sebelumnya, sudah diperbaiki. Penyebabnya `flutter` sebenarnya `flutter.bat`, dan memanggil satu `.bat` dari `.bat` lain **tanpa `call`** memindahkan kendali dan tidak pernah kembali, jadi script berakhir diam-diam di baris itu. Sekarang semua pemanggilan Flutter memakai `call`.
+
+**`jalankan.bat` langsung selesai, `exited with code=0` dalam sedetik** — Ini sudah tidak terjadi lagi. `jalankan.bat` sekarang selalu membuka jendela CMD sendiri yang memakai `cmd /k`, jadi jendelanya tidak bisa menutup sendiri walau scriptnya gagal. Kalau jendela barunya tidak muncul sama sekali, jalankan dari File Explorer dengan klik dua kali.
 
 **`jalankan.bat` bilang Android SDK tidak ketemu**
 Script sudah menyisir seluruh `D:\Aplikasi`. Kalau tetap gagal, ia akan meminta Anda menempel lokasinya langsung di jendela itu — salin dari Android Studio → **Settings** → **Languages & Frameworks** → **Android SDK**, lihat kotak *Android SDK Location*.
@@ -585,7 +705,7 @@ Daftar perubahan terbaru, supaya Anda tidak perlu menebak apa yang baru.
 
 **Nama pelanggan memberi saran.** Ketik dua huruf, nama yang pernah dipakai akan muncul dengan ikon jam. Tekan silang di sebelahnya kalau ada nama salah ketik yang mengganggu — notanya tetap utuh, hanya tidak disarankan lagi. Kembalikan lewat Pengaturan → Beranda → Saran nama pelanggan.
 
-**Tombol nol untuk harga.** Ketik `7`, tekan `+000`, jadi `7000`. Ada `+0`, `+000`, dan `C` untuk hapus. Terpasang di harga item, harga layanan, dan uang diterima.
+**Tombol nol untuk harga.** Ketik `7`, tekan `+000`, jadi `7000`. Hanya `+000`, karena angka nol dan tombol hapus sudah ada di papan ketik bawaan. Terpasang di harga item, harga layanan, dan uang diterima.
 
 **Isian wajib ditandai bintang merah**, seperti di formulir online. Yang wajib hanya nama pelanggan, nama item, jumlah, dan harga.
 
@@ -598,6 +718,180 @@ Daftar perubahan terbaru, supaya Anda tidak perlu menebak apa yang baru.
 **Lebar kertas akhirnya bisa diatur.** Sebelumnya hanya ada dua tombol, 58mm dan 80mm — angka 31 atau 30 tidak bisa dipilih sama sekali. Sekarang ada tombol minus/plus satuan plus pintasan 30, 31, 32, 42, 48.
 
 **Ukuran huruf di struk bisa diatur.** Tambahkan angka di dalam tag: `[C2]` tengah dua kali besar, `[BC3]` tebal tengah tiga kali. Angka 1 sampai 8. Template lama tidak perlu diubah.
+
+### Papan ketik dan tombol cepat
+
+- Tombol di bawah kolom harga tinggal **satu: `+000`**. Tombol `0` dan `C` dihapus karena angka nol dan tombol hapus sudah ada di papan ketik bawaan HP, jadi mengulangnya di layar hanya memakan tempat.
+- **Nama Pelanggan** memakai papan ketik yang huruf awal tiap katanya otomatis besar, jadi "budi santoso" langsung menjadi "Budi Santoso" tanpa menekan Shift.
+- **Catatan** hanya membesarkan huruf pertama kalimat dan huruf setelah titik.
+- Keduanya hanya *saran* papan ketik, bukan paksaan. Anda tetap bebas mengetik huruf kecil kalau memang perlu.
+
+### Logo dan nama aplikasi
+
+Ada folder baru `assets/merek/`. Taruh satu gambar di situ dan nama berkasnya menjadi nama aplikasi. Selengkapnya di bagian 5.
+
+### Panduan di dalam aplikasi
+
+- Butir yang **bisa menghilangkan data sekarang berwarna merah**, bukan hijau seperti yang lain: menghapus nota, dan mencopot aplikasi. Butir hijau aman dicoba kapan saja.
+- Butir pertama menjelaskan arti warna itu, supaya tidak perlu ditebak.
+- Ditambah tiga butir baru: cara mengganti logo dan nama, cara kerja tombol `+000` dan papan ketik, serta rincian apa yang hilang saat aplikasi dicopot.
+
+### jalankan.bat
+
+Ditulis ulang, bukan ditambal:
+
+- **Selalu membuka jendelanya sendiri** dengan `cmd /k`, sehingga tidak bisa menutup sendiri. Dijalankan dari Code Runner, Terminal VS Code, atau klik dua kali, hasilnya sama.
+- **Jalan terus tanpa berhenti selama lancar.** Tidak ada lagi tekan-tombol di tiap langkah yang berhasil; script hanya berhenti kalau ada yang gagal.
+- **Pesan error asli dari perintahnya ikut ditampilkan**, tidak lagi ditelan `>nul`.
+- **Setiap perintah yang lambat didahului baris `... sedang apa`**, jadi tidak ada jeda tanpa keterangan.
+- **Penantian panjang menampilkan titik berjalan** yang berulang 1, 2, 3 lalu menulis ulang barisnya. Selama titiknya bergerak, berarti masih hidup.
+- **Setiap kegagalan menampilkan kotak GAGAL** berisi penyebab, langkah perbaikannya, dan keluaran asli perintah yang gagal.
+- Semuanya juga ditulis ke `jalankan_log.txt`, jadi pesan errornya tetap bisa disalin setelah jendelanya ditutup.
+
+### Template
+
+- **Lima laci simpanan** di halaman Template Struk, lewat ikon folder di kanan atas. Simpan, Pakai, Timpa, dan Kosongkan. Selengkapnya di bagian 7.
+- **Contoh template bawaan sekarang memakai angka**, mengikuti tag ukuran yang baru: `[C2]` untuk nama laundry dan `[B2]` untuk baris total, menggantikan `[H]` yang lama. Template lama tetap jalan, `[H]` tanpa angka masih berarti dua kali besar.
+
+### Alat uji data banyak
+
+Ada `alat/buat_dummy.py` untuk membuat 100.000 sampai 1 juta nota palsu di laptop, supaya bisa mengukur sendiri apakah aplikasi masih enteng. Tidak terpasang di `.bat` mana pun dan tidak ikut ke GitHub. Selengkapnya di bagian 11b, termasuk jawaban soal batas angka `int`.
+
+### Teks yang kepanjangan
+
+- **Nama aplikasi, nomor nota + tanggal, dan keterangan kartu hutang sekarang mengecil, bukan dipotong titik tiga.** Nomor nota dan tanggal dua-duanya dipakai untuk mencari, jadi memotong salah satunya justru menghilangkan yang dibutuhkan.
+- **Nama pelanggan tetap memakai titik tiga**, bukan dikecilkan. Nama bisa sangat panjang, dan mengecilkannya sampai muat akan membuatnya tidak terbaca sama sekali.
+- Nama laundry yang luar biasa panjang berhenti mengecil di batas tertentu lalu memakai titik tiga, jadi tidak pernah menyusut sampai tak terbaca.
+- **Beberapa penjelasan di layar dipersingkat** tanpa membuang isinya: keterangan status pembayaran, pilihan Daftar/Manual, salinan struk, field tambahan, dan hutang Auto/Manual.
+
+Diperiksa pada lebar 320, 360 (setara Nubia ZTE A55), dan 411 dp, termasuk saat ukuran font sistem dinaikkan sampai 1,3x. Pada kondisi paling sempit teks hanya mengecil sampai 90%, masih nyaman dibaca.
+
+### Nota yang belum selesai tidak hilang
+
+Menekan **Kembali** atau **Home** di tengah mengisi nota tidak lagi menghanguskan yang sudah diketik. Membuka Nota Baru lagi mengembalikan semuanya: nama, daftar item, catatan, uang diterima, estimasi, dan kolom tambahan.
+
+Ada spanduk kuning **"Melanjutkan nota yang belum selesai"** di atas, dengan tombol **Mulai Baru** kalau memang ingin mengosongkan.
+
+Drafnya hilang sendiri begitu notanya tersimpan, jadi nota berikutnya selalu mulai kosong. Mode Ubah Nota tidak menulis draf sama sekali.
+
+### Panduan jadi daftar lipat
+
+Tiap butir sekarang tertutup, isinya terbuka saat judulnya ditekan. Ikon di kanan atas membuka atau menutup semuanya sekaligus.
+
+Sebelumnya tab Lanjutan sepanjang sekitar 5 layar penuh. Sekarang seluruh daftarnya muat kira-kira satu layar, dan penjelasan panjang tetap ditulis utuh di bawah judulnya, bukan dipotong titik tiga.
+
+### Emulator selalu mulai bersih
+
+`jalankan.bat` tidak lagi memakai ulang emulator yang sudah menyala:
+
+1. Emulator lama dimatikan lebih dulu (`adb emu kill`)
+2. Emulator baru dinyalakan dengan **boot dingin** (`-no-snapshot-load -no-snapshot-save`), jadi tidak memulihkan keadaan sesi sebelumnya dan tidak meninggalkan snapshot
+3. Aplikasi lama dicopot dari emulator sebelum `flutter run`, supaya pemasangannya benar-benar baru
+
+Akibatnya **data nota di emulator terhapus setiap kali script dijalankan**. Itu disengaja: yang diuji harus kode terbaru, tanpa sisa database dari skema lama. HP asli Anda tidak tersentuh.
+
+Kalau `flutter run` gagal, jejak error dari sisi Android ikut disimpan ke `crash_log.txt`. Gejala "aplikasi keluar sendiri" biasanya tidak meninggalkan pesan di layar, tapi selalu tercatat di sana.
+
+### Pratinjau template kini sama dengan pratinjau nota
+
+Dulu ada **dua penggambar berbeda** untuk satu template. Yang di editor meratakan dengan spasi dan menampilkan semua baris seukuran; yang di pratinjau nota memakai `TextAlign` dan membesarkan huruf sesuai skala. Akibatnya baris `[C2]` terlihat kecil tapi menjorok di satu layar, dan besar serta benar-benar di tengah di layar lain.
+
+Sekarang keduanya memakai widget `KertasStruk` yang sama, dan fungsi perataan teks juga tinggal satu. Keterangan di atas pratinjau ikut menyebut Font A/B, bukan hanya jumlah karakter.
+
+### Bagikan nota ke pelanggan
+
+Tombol **Bagikan ke Pelanggan** di halaman detail nota, di bawah Cetak Struk. Muncul dialog untuk memilih format, boleh lebih dari satu:
+
+| Format | Isinya |
+|---|---|
+| **Teks** | Langsung terbaca di chat. Ukuran huruf tidak ikut, karena WhatsApp tidak mengenalnya |
+| **PDF** | Rapi, lebar halaman mengikuti kertas struk, bisa dicetak ulang pelanggan |
+| **Gambar (PNG)** | Paling mirip struk asli, ukuran huruf ikut terlihat |
+
+Tidak ada API WhatsApp dan tidak ada nomor yang perlu diisi: berkasnya dibuat lokal lalu diserahkan ke menu berbagi bawaan HP, persis seperti Ekspor laporan. Aplikasi tetap **tidak meminta izin INTERNET**.
+
+Isinya disusun oleh penyusun baris yang sama dengan pratinjau dan pencetakan, jadi yang diterima pelanggan tidak pernah berbeda dari yang dilihat kasir.
+
+### Printer dan Font B di Pengaturan
+
+- **Entri "Pilih printer" dihapus dari Pengaturan.** Sudah ada di menu titik tiga beranda, dan dua pintu ke layar yang sama hanya membingungkan.
+- **Font B dan lebar kertas saling mengikuti, dua arah.** Font B hanya benar pada 42 kolom, jadi keduanya tidak mungkin salah pasangan:
+
+  | Yang diubah | Akibatnya |
+  |---|---|
+  | Font B dinyalakan | Lebar jadi 42 |
+  | Font B dimatikan | Lebar jadi 32 |
+  | Lebar diubah ke 42 | Font B ikut menyala |
+  | Lebar diubah ke selain 42 (41, 30, 48, …) | Font B ikut mati |
+
+  Berlaku untuk ketiga cara mengubah lebar: tombol −/+, chip angka, dan sakelar Font B. Sebelumnya aturannya hanya ada di sakelar Font B, jadi mengubah lebar lewat −/+ atau chip meninggalkan Font B menyala di lebar yang salah — dan struknya melipat tanpa sebab yang jelas.
+- Keterangan lebar kertas kini menyebut ukuran fisiknya: `42 karakter per baris - 58mm, Font B`. Jumlah kolom saja tidak cukup, karena 42 kolom bisa berarti 58mm Font B atau 80mm Font A.
+
+### Ketajaman cetak untuk kertas murah
+
+Dua setelan baru di Pengaturan, bagian Kertas dan Huruf. Keduanya bawaannya **Normal**, yang tidak mengirim satu byte perintah tambahan pun — jadi printer yang tidak mengenalinya tidak terpengaruh sama sekali.
+
+| Setelan | Tingkat | Yang dikirim |
+|---|---|---|
+| **Ketajaman cetak** | Normal / Tajam / Lebih tajam / Maksimum | `ESC G` cetak ganda + `ESC 7` lama pemanasan 100/140/190 |
+| **Kecepatan cetak** | Normal / Pelan / Paling pelan | `ESC 7` jeda antar baris titik 2/20/40 |
+
+**Soal "cetak 2x":** dilakukan, tapi bukan dengan mengirim ulang seluruh struk. `ESC G` membuat printer memanaskan tiap titik dua kali **dalam satu lintasan**, tanpa kertas bergerak di antaranya. Jadi kekhawatiran Anda soal lintasan kedua yang meleset tidak berlaku — mustahil bergeser. Mengirim ulang struk secara fisik justru pasti meleset, karena kertasnya sudah terlanjur ditarik.
+
+Konsekuensinya: mencetak lebih lama, baterai printer lebih cepat habis, dan kepala printer lebih panas. Karena itu bawaannya tetap Normal.
+
+> Perintah ini tidak wajib dikenali semua printer. Kalau setelah dinaikkan struknya justru berisi huruf acak, printer Anda tidak mendukungnya — kembalikan ke Normal. Tes Cetak di layar Printer memakai setelan yang sedang aktif, jadi bisa dipakai mencoba tanpa membuang nota.
+
+### Tautan dukungan bisa dibuka langsung
+
+Tombol **Buka** di butir Dukungan sukarela sekarang membuka peramban lewat `MethodChannel` yang sudah ada, bukan hanya menyalin. Tombol **Salin** tetap ada sebagai cadangan, dan tautannya juga ditampilkan sebagai teks yang bisa dipilih.
+
+Ini **tidak menambah izin INTERNET**. Aplikasi hanya menyerahkan alamatnya ke Android lewat `ACTION_VIEW`; peramban yang mengunduhnya, dengan izinnya sendiri. Yang perlu ditambahkan hanya entri `<queries>` di manifest, karena sejak Android 11 aplikasi harus menyebutkan lebih dulu jenis aplikasi yang ingin dituju — tanpa itu, membuka tautan gagal diam-diam.
+
+### Layar Printer tidak menunggu lagi
+
+Dulu layar Printer ditahan spinner sampai tiga pemeriksaan selesai berurutan: izin, status Bluetooth, lalu daftar perangkat. Kalau salah satunya lambat menjawab, layarnya diam sampai 20 detik.
+
+Sekarang: layarnya **langsung tampil**, pemeriksaan status Bluetooth dan daftar perangkat dijalankan **berbarengan**, dan batas waktunya diturunkan dari 8 detik ke 3 detik karena keduanya hanya membaca keadaan lokal, bukan menyambung ke printer. Terburuk 20 detik jadi 5 detik, dan tidak ada lagi layar yang tertahan.
+
+Tombol segarkan di kanan atas sudah ada, jadi menahan layar demi pemeriksaan awal memang tidak ada gunanya.
+
+### Membuka aplikasi lebih cepat
+
+- **Dua pemuatan awal dijalankan berbarengan**, bukan berurutan. Setelan dan merek tidak saling bergantung, tapi keduanya menahan bingkai pertama digambar.
+- **Layar peluncuran tidak berkedip putih lagi.** Warnanya disamakan dengan latar aplikasi, jadi perpindahan ke beranda tidak terlihat sebagai dua tahap.
+- Berkas `android_overrides/res/` berisi setelan itu dan disalin otomatis oleh `setup_lokal.bat` maupun GitHub Actions.
+
+> Ikon aplikasi yang muncul sekilas saat membuka itu **SplashScreen bawaan Android 12 ke atas**, bukan buatan aplikasi ini. Sistem selalu menampilkannya dan tidak bisa dimatikan; yang bisa diatur hanya warnanya, dan itu sudah disamakan supaya tidak terlihat sebagai kedipan.
+
+### Layar Printer langsung menampilkan daftar
+
+Daftar perangkat dari pembukaan sebelumnya disimpan, lalu ditampilkan **seketika** saat layar dibuka. Daftar sebenarnya menyusul beberapa ratus milidetik kemudian dan menimpa yang tersimpan. Tidak ada lagi menunggu 3 detik dengan layar kosong.
+
+### Setelan cetak dibuat lebih jelas
+
+Dua setelan itu dulu bernama "Ketajaman" dan "Kecepatan" tanpa keterangan urutan, jadi membingungkan. Sekarang:
+
+- Dikelompokkan di bawah judul **"Kalau Hasil Cetak Pudar"**, dengan penjelasan bahwa keduanya hanya perlu disentuh kalau tulisan terlihat tipis
+- Diberi nomor urut: **1. Ketebalan tulisan**, lalu **2. Kecepatan cetak**
+- Tingkatnya diberi nama yang berhubungan dengan hasilnya: Normal / Tebal / Lebih tebal / Paling tebal, dan Cepat / Sedang / Pelan
+- Tiap setelan menyebut efek sampingnya, dan menampilkan nilainya sekarang
+
+### .gitignore diperiksa ulang
+
+Ditemukan masalah nyata: **`jalankan.bat` dan `push_ke_github.bat` ikut terunggah ke GitHub** meski `.gitignore` sudah melarang `*.bat`. Sebabnya keduanya sudah dilacak Git sejak commit pertama, sebelum aturannya ada — dan `.gitignore` tidak berlaku untuk berkas yang sudah terlanjur dilacak.
+
+`push_ke_github.bat` sekarang melepaskannya lebih dulu dengan `git rm --cached`, yang hanya menghapus dari daftar Git; berkasnya di folder Anda tetap utuh. Yang dilepas: script `.bat`, `.metadata`, `.dart_tool/`, `build/`, `.idea/`, `pubspec.lock`, `*.iml`, catatan log, `*.db`, `_to_delete/`, dan panduan `.md` lama.
+
+Diuji pada tiruan repo Anda: dari 27 berkas terlacak jadi 11, dan tidak satu pun berkas fisik hilang.
+
+### Logo diterapkan ulang setiap kali dijalankan
+
+Ada kekeliruan rancangan di versi sebelumnya: penerapan logo dan nama menumpang di `setup_lokal.bat`, padahal berkas itu **hanya jalan sekali seumur folder** — dilewati begitu folder `android/` ada. Akibatnya menaruh logo baru di `assets/merek/` belakangan tidak pernah berpengaruh, dan aplikasi tetap memakai logo Flutter.
+
+Sekarang `jalankan.bat` menerapkannya **setiap kali dijalankan**, di luar blok yang dilewati itu. Taruh gambar di `assets/merek/`, jalankan `jalankan.bat`, langsung berlaku. GitHub Actions tidak terpengaruh karena selalu membangun `android/` dari nol.
+
+`setup_lokal.bat` tidak lagi mengerjakannya, supaya tidak ada dua tempat yang mengatur hal yang sama.
 
 ### Soal ukuran aplikasi
 

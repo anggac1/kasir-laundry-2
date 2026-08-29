@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Android 12 ke atas memakai SplashScreen bawaan sistem: ikon aplikasi
+    di tengah layar, tidak bisa dihilangkan sama sekali.
+
+    Yang bisa diatur adalah warnanya dan lamanya. Latarnya disamakan
+    dengan latar aplikasi, dan durasinya diminta sependek mungkin,
+    sehingga perpindahan ke beranda tidak terlihat sebagai dua tahap.
+-->
+<resources>
+    <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowSplashScreenBackground">@color/latar_peluncuran</item>
+        <item name="android:windowSplashScreenAnimationDuration">0</item>
+        <item name="android:windowBackground">@drawable/launch_background</item>
+    </style>
+    <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowBackground">@color/latar_peluncuran</item>
+    </style>
+</resources>

@@ -25,6 +25,34 @@ class EscPos {
 
   void tebal(bool on) => _b.addAll([_esc, 0x45, on ? 1 : 0]);
 
+  // Cetak ganda: tiap titik dipanaskan DUA KALI dalam satu lintasan,
+  // tanpa kertas bergerak di antaranya.
+  //
+  // Ini jawaban yang benar untuk "cetak dua kali": mengulang seluruh
+  // struk secara fisik berisiko meleset karena kertas sudah terlanjur
+  // ditarik, sedangkan ESC G dikerjakan printer per baris titik, jadi
+  // mustahil bergeser. Hasilnya lebih hitam pada kertas yang jelek.
+  void cetakGanda(bool on) => _b.addAll([_esc, 0x47, on ? 1 : 0]);
+
+  // Atur lama pemanasan dan jeda antar baris titik.
+  //
+  //   titikMaks : banyak titik yang dipanaskan sekaligus, satuan 8 titik
+  //   lamaPanas : lama pemanasan, satuan 10 mikrodetik
+  //   jeda      : jeda antar baris titik, satuan 10 mikrodetik
+  //
+  // Makin lama pemanasannya makin hitam hasilnya, tapi makin panas pula
+  // kepala printernya. Makin besar jedanya makin lambat mencetak, dan
+  // itu justru membantu: kertas murah butuh waktu lebih untuk menghitam.
+  void panas(int titikMaks, int lamaPanas, int jeda) {
+    _b.addAll([
+      _esc,
+      0x37,
+      titikMaks.clamp(0, 255),
+      lamaPanas.clamp(3, 255),
+      jeda.clamp(0, 255),
+    ]);
+  }
+
   // Skala 1 sampai 8, batas perangkat kerasnya. 1 berarti ukuran normal.
   //
   // Dua perintah dikirim sekaligus karena printer murah tidak seragam:
@@ -52,6 +80,21 @@ class EscPos {
   }
 
   List<int> selesai() => List<int>.unmodifiable(_b);
+
+  // #Lama pemanasan menurut tingkat ketajaman. 80 adalah bawaan pabrik.
+  static int _lamaPanas(int tingkat) => switch (tingkat) {
+        1 => 100,
+        2 => 140,
+        3 => 190,
+        _ => 80,
+      };
+
+  // #Jeda antar baris titik menurut tingkat kelambatan. 2 adalah bawaan.
+  static int _jeda(int tingkat) => switch (tingkat) {
+        1 => 20,
+        2 => 40,
+        _ => 2,
+      };
 
   // Printer thermal tidak paham UTF-8. Huruf beraksen diturunkan ke ASCII,
   // sisanya jadi '?'. Dipakai juga oleh receipt.dart untuk mengukur lebar
@@ -90,8 +133,18 @@ class EscPos {
     int barisKosongAkhir = 4,
     bool potongKertas = false,
     bool fontKecil = false,
+    int ketajaman = 0,
+    int kelambatan = 0,
   }) {
     final p = EscPos()..init(fontKecil: fontKecil);
+
+    // Perintah ketajaman hanya dikirim bila memang diminta. Printer yang
+    // tidak mengenalinya bisa mencetak sampah, jadi pada setelan Normal
+    // tidak ada satu byte tambahan pun yang dikirim.
+    if (ketajaman > 0 || kelambatan > 0) {
+      p.panas(7, _lamaPanas(ketajaman), _jeda(kelambatan));
+    }
+    if (ketajaman >= 1) p.cetakGanda(true);
 
     // Ukuran dan tebal ditegaskan ulang tiap baris, bukan hanya saat
     // berubah: pada sebagian printer ESC ! 0x00 ikut mematikan tebal,
@@ -106,6 +159,7 @@ class EscPos {
     p.besar(1);
     p.tebal(false);
     p.rata(rataKiri);
+    if (ketajaman >= 1) p.cetakGanda(false);
 
     if (potongKertas) {
       p.potong();

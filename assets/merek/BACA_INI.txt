@@ -1,0 +1,23 @@
+FOLDER LOGO DAN NAMA APLIKASI
+=============================
+
+Taruh SATU berkas gambar di folder ini. Nama berkasnya akan dipakai
+sebagai nama aplikasi, dan gambarnya sebagai logo di pojok kiri atas.
+
+Contoh:
+  Kasir Melati.png     ->  aplikasi bernama "Kasir Melati"
+  Laundry Bu Sri.jpg   ->  aplikasi bernama "Laundry Bu Sri"
+
+Yang perlu diingat:
+  - Ekstensi TIDAK ikut terbaca. Cukup beri nama berkasnya saja.
+  - Format yang didukung: png, jpg, jpeg, webp, gif, bmp.
+  - Ukuran ideal 512x512 piksel, latar transparan (png) paling rapi.
+  - Kalau ada lebih dari satu berkas, yang terpakai adalah yang paling
+    awal secara alfabet.
+  - Folder ini kosong = memakai bawaan, yaitu logo Flutter dan nama
+    "Kasir Laundry".
+
+Berkas BACA_INI.txt ini diabaikan aplikasi, jadi boleh dibiarkan.
+
+Setelah menaruh atau mengganti gambar, jalankan ulang aplikasinya
+(atau build ulang APK-nya lewat push_ke_github.bat).

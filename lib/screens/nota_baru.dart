@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../db/db.dart';
 import '../models/models.dart';
@@ -38,6 +41,14 @@ class _NotaBaruScreenState extends State<NotaBaruScreen> {
   int _statusBayar = StatusBayar.belum;
   bool _menyimpan = false;
 
+  // Kasir yang menekan tombol status sendiri tidak boleh ditimpa otomatis.
+  // Selama ini masih false, status mengikuti uang yang diterima.
+  bool _statusDipilihSendiri = false;
+
+  // Draf hasil kembali dari layar lain atau dari aplikasi yang tertutup.
+  // Dipakai hanya untuk memunculkan spanduk "melanjutkan", bukan logika.
+  bool _dariDraf = false;
+
   // Kolom isian buatan pengguna. Kunci = kunci placeholder.
   final Map<String, TextEditingController> _ekstraCtrl = {};
   late List<String> _labelEkstra;
@@ -69,13 +80,156 @@ class _NotaBaruScreenState extends State<NotaBaruScreen> {
       final st = Settings.instance;
       _pakaiEstimasi = st.pakaiEstimasi;
       _estimasi = DateTime.now().add(Duration(days: st.estimasiHari));
+      _pulihkanDraf();
     }
+
+    // Dipasang paling akhir: mengisi kolom di atas tidak boleh ikut
+    // memicu perubahan status.
+    _uangCtrl.addListener(_uangBerubah);
+
+    // Setiap ketikan ikut tersimpan, supaya menekan Kembali atau Home
+    // tidak menghanguskan yang sudah diisi.
+    if (!_modeEdit) {
+      _namaCtrl.addListener(_simpanDraf);
+      _catatanCtrl.addListener(_simpanDraf);
+      _uangCtrl.addListener(_simpanDraf);
+      _cetakCtrl.addListener(_simpanDraf);
+      for (final c in _ekstraCtrl.values) {
+        c.addListener(_simpanDraf);
+      }
+    }
+  }
+
+  // #Menuliskan seluruh isian ke penyimpanan sebagai satu teks JSON
+  void _simpanDraf() {
+    if (_modeEdit) return;
+    final kosong = _namaCtrl.text.trim().isEmpty &&
+        _items.isEmpty &&
+        _catatanCtrl.text.trim().isEmpty &&
+        _uangCtrl.text.trim().isEmpty;
+    if (kosong) {
+      Settings.instance.hapusDraf();
+      return;
+    }
+    Settings.instance.setDraf(jsonEncode({
+      'nama': _namaCtrl.text,
+      'catatan': _catatanCtrl.text,
+      'uang': _uangCtrl.text,
+      'cetak': _cetakCtrl.text,
+      'status': _statusBayar,
+      'status_manual': _statusDipilihSendiri,
+      'pakai_estimasi': _pakaiEstimasi,
+      'estimasi': _estimasi?.millisecondsSinceEpoch,
+      'items': _items.map((e) => e.toMap()).toList(),
+      'ekstra': {
+        for (final e in _ekstraCtrl.entries) e.key: e.value.text,
+      },
+    }));
+  }
+
+  // #Mengembalikan isian dari draf, kalau ada dan masih bisa dibaca
+  void _pulihkanDraf() {
+    final teks = Settings.instance.draf;
+    if (teks == null || teks.isEmpty) return;
+    try {
+      final m = jsonDecode(teks) as Map<String, dynamic>;
+      _namaCtrl.text = (m['nama'] ?? '') as String;
+      _catatanCtrl.text = (m['catatan'] ?? '') as String;
+      _uangCtrl.text = (m['uang'] ?? '') as String;
+      _cetakCtrl.text = (m['cetak'] ?? '') as String;
+      _statusBayar = (m['status'] ?? StatusBayar.belum) as int;
+      _statusDipilihSendiri = (m['status_manual'] ?? false) as bool;
+      _pakaiEstimasi = (m['pakai_estimasi'] ?? true) as bool;
+      final est = m['estimasi'];
+      _estimasi =
+          est is int ? DateTime.fromMillisecondsSinceEpoch(est) : _estimasi;
+      final items = m['items'];
+      if (items is List) {
+        _items.addAll(items
+            .whereType<Map>()
+            .map((e) => ItemNota.fromMap(Map<String, Object?>.from(e))));
+      }
+      final ekstra = m['ekstra'];
+      if (ekstra is Map) {
+        for (final e in _ekstraCtrl.entries) {
+          final v = ekstra[e.key];
+          if (v is String) e.value.text = v;
+        }
+      }
+      _dariDraf = _namaCtrl.text.trim().isNotEmpty || _items.isNotEmpty;
+    } catch (_) {
+      // Draf dari versi lama atau rusak: buang saja, jangan sampai
+      // menghalangi pembuatan nota baru.
+      Settings.instance.hapusDraf();
+    }
+  }
+
+  // #Membuang draf dan mengosongkan seluruh isian
+  void _mulaiBaru() {
+    Settings.instance.hapusDraf();
+    setState(() {
+      _namaCtrl.clear();
+      _catatanCtrl.clear();
+      _uangCtrl.clear();
+      _cetakCtrl.clear();
+      for (final c in _ekstraCtrl.values) {
+        c.clear();
+      }
+      _items.clear();
+      _statusBayar = StatusBayar.belum;
+      _statusDipilihSendiri = false;
+      final st = Settings.instance;
+      _pakaiEstimasi = st.pakaiEstimasi;
+      _estimasi = DateTime.now().add(Duration(days: st.estimasiHari));
+      _dariDraf = false;
+    });
+  }
+
+  // #Uang diterima mencukupi tagihan berarti nota itu lunas
+  //
+  // _uangCtrl juga didengarkan ValueListenableBuilder di bawah. Keduanya
+  // terbangun oleh ketukan yang sama, jadi setState di sini bisa jatuh
+  // TEPAT saat kerangka sedang menggambar bagian itu, dan Flutter
+  // menolaknya dengan "_dependents.isEmpty is not true".
+  //
+  // Karena itu perubahannya ditunda sampai gambarnya selesai. Kalau
+  // sedang tidak menggambar, dikerjakan langsung supaya tidak ada kedip.
+  void _uangBerubah() {
+    if (_statusDipilihSendiri || !mounted) return;
+    final uang = int.tryParse(_uangCtrl.text.trim());
+    final cukup = uang != null && _total > 0 && uang >= _total;
+    final baru = cukup ? StatusBayar.lunas : StatusBayar.belum;
+    if (baru == _statusBayar) return;
+
+    final fase = SchedulerBinding.instance.schedulerPhase;
+    final sedangMenggambar = fase == SchedulerPhase.persistentCallbacks ||
+        fase == SchedulerPhase.midFrameMicrotasks;
+
+    if (!sedangMenggambar) {
+      setState(() => _statusBayar = baru);
+      return;
+    }
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _statusDipilihSendiri) return;
+      if (_statusBayar == baru) return;
+      setState(() => _statusBayar = baru);
+    });
   }
 
   @override
   void dispose() {
+    if (!_modeEdit) {
+      _namaCtrl.removeListener(_simpanDraf);
+      _catatanCtrl.removeListener(_simpanDraf);
+      _uangCtrl.removeListener(_simpanDraf);
+      _cetakCtrl.removeListener(_simpanDraf);
+      for (final c in _ekstraCtrl.values) {
+        c.removeListener(_simpanDraf);
+      }
+    }
     _namaCtrl.dispose();
     _catatanCtrl.dispose();
+    _uangCtrl.removeListener(_uangBerubah);
     _uangCtrl.dispose();
     _cetakCtrl.dispose();
     for (final c in _ekstraCtrl.values) {
@@ -147,6 +301,8 @@ class _NotaBaruScreenState extends State<NotaBaruScreen> {
     final item = await dialogQtyLayanan(context, dipilih);
     if (item == null || !mounted) return;
     setState(() => _items.add(item));
+    _uangBerubah();
+    _simpanDraf();
   }
 
   Future<void> _itemManual({ItemNota? edit}) async {
@@ -160,6 +316,8 @@ class _NotaBaruScreenState extends State<NotaBaruScreen> {
         _items.add(hasil);
       }
     });
+    _uangBerubah();
+    _simpanDraf();
   }
 
   Future<void> _pratinjauSaja() async {
@@ -180,7 +338,10 @@ class _NotaBaruScreenState extends State<NotaBaruScreen> {
       firstDate: DateTime(kini.year - 1),
       lastDate: DateTime(kini.year + 2),
     );
-    if (d != null && mounted) setState(() => _estimasi = d);
+    if (d != null && mounted) {
+      setState(() => _estimasi = d);
+      _simpanDraf();
+    }
   }
 
   bool _isianLengkap() {
@@ -201,6 +362,8 @@ class _NotaBaruScreenState extends State<NotaBaruScreen> {
     try {
       final nota = await _susunNota(untukSimpan: true);
       nota.id = await DB.instance.notaSimpan(nota);
+      // Sudah tersimpan di database, drafnya tidak berguna lagi.
+      if (!_modeEdit) await Settings.instance.hapusDraf();
       return nota;
     } finally {
       if (mounted) setState(() => _menyimpan = false);
@@ -272,6 +435,40 @@ class _NotaBaruScreenState extends State<NotaBaruScreen> {
           16 + MediaQuery.of(context).viewInsets.bottom,
         ),
         children: [
+          // Isian yang dipulihkan harus kelihatan dipulihkan. Tanpa
+          // penanda ini, nota lama yang muncul sendiri terlihat seperti
+          // kesalahan aplikasi.
+          if (_dariDraf) ...[
+            Container(
+              padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+              decoration: BoxDecoration(
+                color: Colors.amber.shade50,
+                border: Border.all(color: Colors.amber.shade300),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.history, size: 18, color: Colors.amber.shade900),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Melanjutkan nota yang belum selesai.',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: _mulaiBaru,
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      minimumSize: const Size(0, 36),
+                    ),
+                    child: const Text('Mulai Baru'),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           KolomNama(
             controller: _namaCtrl,
             cariSaran: _saranNama,
@@ -349,8 +546,8 @@ class _NotaBaruScreenState extends State<NotaBaruScreen> {
           const Padding(
             padding: EdgeInsets.only(bottom: 4),
             child: Text(
-              'Daftar mengambil dari layanan tersimpan. Manual untuk baris '
-              'bebas seperti tambah pemutih, hutang, atau saldo titipan.',
+              'Daftar = dari layanan tersimpan. Manual = baris bebas, '
+              'misalnya tambah pemutih, hutang, atau titipan.',
               style: TextStyle(fontSize: 11, color: Colors.grey),
             ),
           ),
@@ -404,14 +601,20 @@ class _NotaBaruScreenState extends State<NotaBaruScreen> {
                   value: StatusBayar.sembunyi, label: Text('Sembunyi')),
             ],
             selected: {_statusBayar},
-            onSelectionChanged: (v) => setState(() => _statusBayar = v.first),
+            onSelectionChanged: (v) {
+              setState(() {
+                _statusBayar = v.first;
+                _statusDipilihSendiri = true;
+              });
+              _simpanDraf();
+            },
           ),
           const Padding(
             padding: EdgeInsets.only(top: 6),
             child: Text(
-              'Pilih Sembunyi kalau baris pembayaran tidak perlu tercetak '
-              'di struk. Statusnya bisa diubah kapan saja lewat halaman '
-              'detail nota, tanpa perlu mencetak ulang.',
+              'Jadi LUNAS sendiri kalau uang diterima mencukupi. '
+              'Menekan tombol di atas mematikan otomatis itu.\n'
+              'Sembunyi = baris ini tidak dicetak di struk.',
               style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ),
@@ -440,6 +643,7 @@ class _NotaBaruScreenState extends State<NotaBaruScreen> {
           TextField(
             controller: _catatanCtrl,
             maxLines: 3,
+            textCapitalization: TextCapitalization.sentences,
             decoration: const InputDecoration(
               labelText: 'Catatan (opsional)',
               alignLabelWithHint: true,
@@ -520,7 +724,11 @@ class _NotaBaruScreenState extends State<NotaBaruScreen> {
                 style: const TextStyle(fontWeight: FontWeight.bold)),
             IconButton(
               icon: const Icon(Icons.delete_outline),
-              onPressed: () => setState(() => _items.remove(it)),
+              onPressed: () {
+                setState(() => _items.remove(it));
+                _uangBerubah();
+                _simpanDraf();
+              },
             ),
           ],
         ),

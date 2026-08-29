@@ -138,9 +138,7 @@ class _LayananScreenState extends State<LayananScreen> {
       ));
       await _muat();
     } finally {
-      namaCtrl.dispose();
-      hargaCtrl.dispose();
-      satuanCtrl.dispose();
+      buangNanti([namaCtrl, hargaCtrl, satuanCtrl]);
     }
   }
 

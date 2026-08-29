@@ -22,10 +22,27 @@ class _PrinterSetupScreenState extends State<PrinterSetupScreen> {
   bool _sibuk = false;
   String _kegiatan = '';
 
+  // Daftar perangkat dari pembukaan sebelumnya. Ditampilkan seketika
+  // supaya layar tidak pernah kosong, lalu ditimpa hasil pemeriksaan
+  // yang sebenarnya beberapa ratus milidetik kemudian.
+  List<BluetoothInfo> _tersimpan = const [];
+
   @override
   void initState() {
     super.initState();
+    _tersimpan = _bacaSimpanan();
     _periksa(mintaIzin: false);
+  }
+
+  // #Membaca daftar "mac|nama" yang disimpan pembukaan sebelumnya
+  List<BluetoothInfo> _bacaSimpanan() {
+    final hasil = <BluetoothInfo>[];
+    for (final baris in s.printerTerakhir) {
+      final pisah = baris.split('|');
+      if (pisah.length < 2) continue;
+      hasil.add(BluetoothInfo(name: pisah[1], macAdress: pisah[0]));
+    }
+    return hasil;
   }
 
   // Dilepas lewat variabel, bukan hanya lewat setState, supaya tombol tidak
@@ -44,7 +61,19 @@ class _PrinterSetupScreenState extends State<PrinterSetupScreen> {
     });
     try {
       final d = await PrinterService.instance.periksa(mintaIzinDulu: mintaIzin);
-      if (mounted) setState(() => _diagnosa = d);
+      // Disimpan untuk pembukaan berikutnya. Hanya kalau memang ada
+      // isinya: daftar kosong karena izin belum diberikan tidak boleh
+      // menghapus daftar yang sudah benar.
+      if (d.perangkat.isNotEmpty) {
+        await s.setPrinterTerakhir(
+            d.perangkat.map((b) => '${b.macAdress}|${b.name}').toList());
+      }
+      if (mounted) {
+        setState(() {
+          _diagnosa = d;
+          _tersimpan = d.perangkat;
+        });
+      }
     } finally {
       _lepasSibuk();
     }
@@ -99,10 +128,14 @@ class _PrinterSetupScreenState extends State<PrinterSetupScreen> {
 
     final HasilCetak hasil;
     try {
+      // Tes cetak sengaja memakai setelan ketajaman yang sedang aktif,
+      // supaya yang diuji benar-benar sama dengan struk sungguhan.
       final bytes = EscPos.dariBaris(baris,
           barisKosongAkhir: s.barisKosongAkhir,
           potongKertas: s.potongKertas,
-          fontKecil: s.fontKecil);
+          fontKecil: s.fontKecil,
+          ketajaman: s.ketajamanCetak,
+          kelambatan: s.kelambatanCetak);
       hasil = await PrinterService.instance.kirim(bytes);
     } finally {
       _lepasSibuk();
@@ -279,10 +312,24 @@ class _PrinterSetupScreenState extends State<PrinterSetupScreen> {
                     TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
           ),
 
-          if (d == null)
+          // Selama pemeriksaan pertama berjalan, yang tampil adalah daftar
+          // dari pembukaan sebelumnya. Layar tidak pernah kosong dan tidak
+          // pernah menahan pengguna menunggu.
+          if (d == null && _tersimpan.isNotEmpty)
+            ..._tersimpan.map((b) => ListTile(
+                  leading: const Icon(Icons.bluetooth),
+                  title: Text(b.name.isEmpty ? '(tanpa nama)' : b.name),
+                  subtitle: Text(b.macAdress),
+                  trailing: s.printerMac == b.macAdress
+                      ? const Icon(Icons.check_circle, color: Colors.green)
+                      : null,
+                  onTap: () => _pilih(b),
+                ))
+          else if (d == null)
             const Padding(
-              padding: EdgeInsets.all(24),
-              child: Center(child: CircularProgressIndicator()),
+              padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
+              child: Text('Memuat daftar perangkat...',
+                  style: TextStyle(color: Colors.grey, fontSize: 12)),
             )
           else if (d.perangkat.isEmpty)
             Padding(

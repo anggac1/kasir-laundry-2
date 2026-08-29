@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Sama dengan kWarnaLatar di lib/main.dart -->
+    <color name="latar_peluncuran">#F7FAF9</color>
+</resources>

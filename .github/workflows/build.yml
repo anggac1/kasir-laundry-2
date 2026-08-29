@@ -81,6 +81,10 @@ jobs:
           mkdir -p /tmp/simpan
           cp -r lib /tmp/simpan/
           cp pubspec.yaml /tmp/simpan/
+          # assets/ berisi logo dan nama; alat/ berisi script yang
+          # menerapkannya. Keduanya harus selamat melewati flutter create.
+          cp -r assets /tmp/simpan/ 2>/dev/null || true
+          cp -r alat /tmp/simpan/ 2>/dev/null || true
 
       # Kerangka folder android/ dibuat otomatis oleh Flutter,
       # jadi tidak perlu disimpan di repo.
@@ -92,6 +96,8 @@ jobs:
           rm -rf lib test
           cp -r /tmp/simpan/lib .
           cp /tmp/simpan/pubspec.yaml .
+          cp -r /tmp/simpan/assets . 2>/dev/null || true
+          cp -r /tmp/simpan/alat . 2>/dev/null || true
           cp android_overrides/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
           # MainActivity buatan sendiri: menyediakan jalan membuka Setelan
           # Bluetooth langsung dari aplikasi.
@@ -110,6 +116,12 @@ jobs:
       # evaluationDependsOn(':app') di akhir berkas yang sama.
       - name: Tambal namespace plugin lama
         run: |
+          # Layar peluncuran tanpa kedipan putih.
+          cp -r android_overrides/res/. android/app/src/main/res/
+
+          # Logo dan nama dari assets/merek/. Folder kosong = tidak diubah.
+          dart run alat/terapkan_merek.dart
+
           cp android/build.gradle /tmp/build.gradle.asli
           cat android_overrides/namespace_patch.gradle /tmp/build.gradle.asli > android/build.gradle
           echo "--- 8 baris pertama android/build.gradle ---"

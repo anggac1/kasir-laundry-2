@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Layar peluncuran. Warnanya disamakan dengan latar aplikasi supaya
+    tidak ada kedipan putih antara ikon dan beranda. Sengaja tanpa gambar:
+    logo yang muncul lalu hilang hanya menambah waktu tunggu.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/latar_peluncuran" />
+</layer-list>

@@ -7,6 +7,21 @@
 # Tampungan berkas yang menunggu dihapus manual
 _to_delete/
 
+# Catatan jalannya jalankan.bat, hanya berguna di laptop
+jalankan_log.txt
+crash_log.txt
+
+# Data uji buatan alat/buat_dummy.py.
+#
+# Berkas .db bisa ratusan MB dan isinya nama karangan, tidak ada gunanya
+# di GitHub. Scriptnya sendiri (alat/*.py) sengaja TIDAK diabaikan supaya
+# ikut tersimpan, karena ukurannya kecil dan berguna diulang.
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+dummy*.db
+
 # Semua panduan digabung di README.md, dan README ikut diunggah
 # karena itu satu-satunya dokumentasi.
 *.md
@@ -19,6 +34,8 @@ _to_delete/
 .flutter-plugins-dependencies
 build/
 pubspec.lock
+.metadata
+*.log
 
 # Kerangka platform dibuat ulang otomatis oleh GitHub Actions
 android/
@@ -33,6 +50,8 @@ test/
 .idea/
 .vscode/
 *.iml
+*.swp
+*~
 
 # Sistem
 .DS_Store

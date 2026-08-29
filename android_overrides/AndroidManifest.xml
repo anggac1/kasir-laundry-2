@@ -68,5 +68,18 @@
             <action android:name="android.intent.action.PROCESS_TEXT" />
             <data android:mimeType="text/plain" />
         </intent>
+
+        <!--
+            Sejak Android 11, aplikasi harus menyebutkan lebih dulu jenis
+            aplikasi lain yang ingin dituju. Tanpa blok ini, membuka tautan
+            gagal diam-diam karena sistem berpura-pura tidak ada peramban.
+
+            Ini BUKAN izin internet. Aplikasi hanya menyerahkan alamatnya
+            ke peramban; ia sendiri tetap tidak bisa berkirim data.
+        -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
     </queries>
 </manifest>

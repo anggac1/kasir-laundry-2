@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../db/db.dart';
+import '../export/bagikan_nota.dart';
 import '../models/models.dart';
 import '../store/settings.dart';
 import '../ui/umum.dart';
@@ -118,6 +119,21 @@ class _NotaDetailScreenState extends State<NotaDetailScreen> {
       MaterialPageRoute(builder: (_) => NotaBaruScreen(notaAwal: n)),
     );
     await _muat();
+  }
+
+  // #Mengirim nota ke pelanggan lewat menu berbagi bawaan HP
+  Future<void> _bagikan() async {
+    final n = _nota;
+    if (n == null) return;
+    final format = await pilihFormatBagikan(context);
+    if (format == null || format.isEmpty || !mounted) return;
+
+    pesan(context, 'Menyiapkan berkas...');
+    final ok = await BagikanNota.instance.bagikan(context, n, format);
+    if (!mounted) return;
+    if (!ok) {
+      pesan(context, 'Gagal menyiapkan berkas untuk dibagikan.', galat: true);
+    }
   }
 
   @override
@@ -287,6 +303,12 @@ class _NotaDetailScreenState extends State<NotaDetailScreen> {
                       onPressed: _cetak,
                       icon: const Icon(Icons.print_outlined),
                       label: const Text('Cetak Struk'),
+                    ),
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      onPressed: _bagikan,
+                      icon: const Icon(Icons.share_outlined),
+                      label: const Text('Bagikan ke Pelanggan'),
                     ),
                     const SizedBox(height: 32),
                   ],
