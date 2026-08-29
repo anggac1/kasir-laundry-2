@@ -30,6 +30,12 @@ class BagikanNota {
   static List<BarisStruk> _baris(Nota nota) =>
       PrinterService.instance.susunBaris(nota, paksaSalinan: 1);
 
+  // #Baris yang sama persis dengan yang dipakai membuat gambar dan PDF
+  //
+  // Dibuka aksesnya supaya layar pratinjau menggambar dari sumber yang
+  // sama, bukan menyusun ulang dengan aturannya sendiri.
+  static List<BarisStruk> barisStruk(Nota nota) => _baris(nota);
+
   // #Struk sebagai teks biasa, siap ditempel di chat
   //
   // WhatsApp tidak mengenal ukuran huruf, jadi tag [C2] dan [B] hanya
@@ -83,24 +89,86 @@ class BagikanNota {
   }
 
   // #Struk dicetak ke PDF dengan huruf monospace, supaya kolomnya lurus
+  Future<String> buatPdf(Nota nota, String teks) => _buatPdf(nota, teks);
+
+  Future<String?> buatGambar(Nota nota) => _buatGambar(nota);
+
   Future<String> _buatPdf(Nota nota, String teks) async {
     final doc = pw.Document();
-    // Lebar halaman mengikuti kertas struk, bukan A4: hasilnya terbaca
-    // wajar di layar HP pelanggan, bukan secuil teks di pojok kertas.
-    final lebarMm = Settings.instance.lebarKertas <= 42 ? 58.0 : 80.0;
+    final lebarKolom = Settings.instance.lebarKertas;
+    final baris = _baris(nota);
+
+    // Lebar halaman mengikuti kertas struk, bukan A4.
+    final lebarMm = lebarKolom <= 42 ? 58.0 : 80.0;
+    final lebarHalaman = lebarMm * PdfPageFormat.mm;
+    const tepi = 5.0 * PdfPageFormat.mm;
+    final ruang = lebarHalaman - tepi * 2;
+
+    // Ukuran huruf DIHITUNG dari lebar kertas, bukan angka tetap.
+    //
+    // Courier Type 1 lebar tiap hurufnya persis 0,6 x ukuran huruf. Itu
+    // angka baku format PDF, bukan perkiraan. Sebelumnya dipatok 8,5 pt,
+    // sehingga hanya muat 25 karakter dari 32 dan setiap baris melipat
+    // jadi dua.
+    const kLebarCourier = 0.6;
+    final dasar = ruang / (lebarKolom * kLebarCourier);
+    final monospace = pw.Font.courier();
+    final monospaceTebal = pw.Font.courierBold();
+
     doc.addPage(
       pw.Page(
         pageFormat: PdfPageFormat(
-          lebarMm * PdfPageFormat.mm,
+          lebarHalaman,
           double.infinity,
-          marginAll: 6 * PdfPageFormat.mm,
+          marginAll: tepi,
         ),
-        build: (ctx) => pw.Text(
-          teks,
-          style: pw.TextStyle(font: pw.Font.courier(), fontSize: 8.5),
+        build: (ctx) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+          mainAxisSize: pw.MainAxisSize.min,
+          // Digambar per baris dari daftar BarisStruk, bukan dari teks
+          // polos. Dengan begitu tag ukuran dan tebal ikut terlihat,
+          // sama seperti di kertas dan di gambar.
+          children: baris.map((b) {
+            final efektif = Struk.lebarEfektif(lebarKolom, b.skalaLebar);
+            var t = b.teks;
+            if (t.length > efektif) t = t.substring(0, efektif);
+
+            // Ukuran huruf mengikuti LEBAR, karena itu yang menentukan
+            // berapa karakter muat sebaris.
+            //
+            // Tinggi yang berbeda ([C1.5] = lebar 1 tinggi 2) tidak bisa
+            // diregangkan di PDF: paket pdf hanya punya Transform.scale
+            // yang seragam, dan matriksnya butuh paket tambahan. Yang
+            // dilakukan di sini memberi baris itu ruang vertikal lebih
+            // lega lewat lineSpacing, sehingga tetap terbaca sebagai
+            // baris yang lebih menonjol.
+            final ukuran = dasar * b.skalaLebar;
+            final regang = b.skalaTinggi / b.skalaLebar;
+
+            final teks = pw.Text(
+              t.isEmpty ? ' ' : t,
+              textAlign: b.rata == EscPos.rataTengah
+                  ? pw.TextAlign.center
+                  : (b.rata == EscPos.rataKanan
+                      ? pw.TextAlign.right
+                      : pw.TextAlign.left),
+              maxLines: 1,
+              softWrap: false,
+              style: pw.TextStyle(
+                font: b.tebal ? monospaceTebal : monospace,
+                fontSize: ukuran,
+                // Disamakan dengan gambar: tinggi baris 1,25 x ukuran
+                // huruf, ditambah ruang untuk baris yang lebih tinggi.
+                lineSpacing: ukuran * (0.25 + (regang - 1)),
+              ),
+            );
+
+            return teks;
+          }).toList(),
         ),
       ),
     );
+
     final dir = await getApplicationDocumentsDirectory();
     final path = '${dir.path}/${_namaBerkas(nota, 'pdf')}';
     await File(path).writeAsBytes(await doc.save(), flush: true);
@@ -117,46 +185,48 @@ class BagikanNota {
       final baris = _baris(nota);
       final lebarKolom = Settings.instance.lebarKertas;
 
-      const skalaPiksel = 2.5;
-      const tepi = 20.0;
-      const dasarHuruf = 13.0;
-      // Lebar kanvas dihitung dari lebar kertas, bukan angka tetap, supaya
-      // struk 48 kolom tidak terpotong.
-      final lebarIsi = lebarKolom * dasarHuruf * 0.62;
+      // Digambar 4x lebih besar daripada ukuran layar, lalu disimpan apa
+      // adanya. Hasilnya tajam saat dibuka besar di WhatsApp, dan tidak
+      // terlihat sebagai gambar mungil di daftar chat.
+      const skalaPiksel = 4.0;
+      const tepi = 16.0;
+      const dasarHuruf = 14.0;
+
+      // Lebar kertas DIUKUR dari font sungguhan, bukan ditebak.
+      //
+      // Versi sebelumnya memakai angka tetap 0,62 sebagai perkiraan lebar
+      // satu huruf monospace. Kalau font di HP ternyata lebih sempit,
+      // teksnya tidak memenuhi kanvas dan gambarnya jadi separuh kosong.
+      // Sekarang satu baris penuh diukur lebih dulu, dan hasilnya yang
+      // dipakai sebagai lebar kertas.
+      final lebarIsi = _ukurLebar('W' * lebarKolom, dasarHuruf);
       final lebarTotal = lebarIsi + tepi * 2;
 
       // Tahap 1: susun tiap baris dan ukur tingginya lebih dulu.
       final paragraf = <ui.Paragraph>[];
+      final regangan = <double>[];
       var tinggiIsi = 0.0;
       for (final b in baris) {
-        final efektif = Struk.lebarEfektif(lebarKolom, b.skala);
+        final efektif = Struk.lebarEfektif(lebarKolom, b.skalaLebar);
         var t = b.teks;
         if (t.length > efektif) t = t.substring(0, efektif);
         if (t.isEmpty) t = ' ';
 
-        final ukuran = (dasarHuruf * b.skala).clamp(dasarHuruf, 34.0);
-        final gaya = ui.ParagraphStyle(
-          textAlign: b.rata == EscPos.rataTengah
-              ? TextAlign.center
-              : (b.rata == EscPos.rataKanan
-                  ? TextAlign.right
-                  : TextAlign.left),
-          fontFamily: 'monospace',
-          fontSize: ukuran,
-          height: 1.35,
+        // Ukuran mengikuti LEBAR; tinggi yang berbeda ([C1.5] misalnya)
+        // diwujudkan dengan meregangkan kanvas saat menggambar, sama
+        // seperti printer yang menumbuhkan huruf ke bawah saja.
+        final ukuran = dasarHuruf * b.skalaLebar;
+        final regang = b.skalaTinggi / b.skalaLebar;
+        final p = _susunParagraf(
+          t,
+          ukuran: ukuran,
+          tebal: b.tebal,
+          rata: b.rata,
+          lebar: lebarIsi,
         );
-        final pb = ui.ParagraphBuilder(gaya)
-          ..pushStyle(ui.TextStyle(
-            color: const Color(0xFF000000),
-            fontFamily: 'monospace',
-            fontSize: ukuran,
-            fontWeight: b.tebal ? FontWeight.w900 : FontWeight.normal,
-          ))
-          ..addText(t);
-        final p = pb.build()
-          ..layout(ui.ParagraphConstraints(width: lebarIsi));
         paragraf.add(p);
-        tinggiIsi += p.height;
+        regangan.add(regang);
+        tinggiIsi += p.height * regang;
       }
 
       final tinggiTotal = tinggiIsi + tepi * 2;
@@ -164,14 +234,36 @@ class BagikanNota {
       // Tahap 2: gambar di atas kertas putih.
       final perekam = ui.PictureRecorder();
       final kanvas = Canvas(perekam);
+
+      // WAJIB: kanvasnya ikut diperbesar sebelum menggambar.
+      //
+      // toImage() hanya menentukan ukuran BINGKAI hasil, bukan ukuran
+      // gambarnya. Tanpa scale ini, struk tetap digambar sebesar ukuran
+      // logisnya lalu ditaruh di pojok kiri atas bingkai yang empat kali
+      // lebih besar, dan sisanya kosong. Itulah "gambar mungil" yang
+      // terlihat sebelumnya.
+      kanvas.scale(skalaPiksel);
+
       kanvas.drawRect(
         Rect.fromLTWH(0, 0, lebarTotal, tinggiTotal),
         Paint()..color = const Color(0xFFFFFFFF),
       );
       var y = tepi;
-      for (final p in paragraf) {
-        kanvas.drawParagraph(p, Offset(tepi, y));
-        y += p.height;
+      for (var i = 0; i < paragraf.length; i++) {
+        final p = paragraf[i];
+        final regang = regangan[i];
+        if (regang == 1) {
+          kanvas.drawParagraph(p, Offset(tepi, y));
+        } else {
+          // Diregangkan ke bawah saja, lebarnya tetap.
+          kanvas
+            ..save()
+            ..translate(tepi, y)
+            ..scale(1, regang);
+          kanvas.drawParagraph(p, Offset.zero);
+          kanvas.restore();
+        }
+        y += p.height * regang;
       }
 
       final gambar = await perekam.endRecording().toImage(
@@ -190,6 +282,50 @@ class BagikanNota {
       // terkirim, jadi pembagiannya tidak ikut batal.
       return null;
     }
+  }
+
+  // #Mengukur lebar sebenarnya sepotong teks pada ukuran huruf tertentu
+  static double _ukurLebar(String teks, double ukuran) {
+    final pb = ui.ParagraphBuilder(ui.ParagraphStyle(
+      fontFamily: 'monospace',
+      fontSize: ukuran,
+    ))
+      ..pushStyle(ui.TextStyle(fontFamily: 'monospace', fontSize: ukuran))
+      ..addText(teks);
+    final p = pb.build()
+      ..layout(const ui.ParagraphConstraints(width: double.infinity));
+    return p.maxIntrinsicWidth;
+  }
+
+  // #Satu baris siap gambar
+  static ui.Paragraph _susunParagraf(
+    String teks, {
+    required double ukuran,
+    required bool tebal,
+    required int rata,
+    required double lebar,
+  }) {
+    final gaya = ui.ParagraphStyle(
+      textAlign: rata == EscPos.rataTengah
+          ? TextAlign.center
+          : (rata == EscPos.rataKanan ? TextAlign.right : TextAlign.left),
+      fontFamily: 'monospace',
+      fontSize: ukuran,
+      height: 1.25,
+      // maxLines sengaja tidak dipasang. Teksnya sudah dipotong tepat
+      // sepanjang kolom yang muat, jadi tidak akan melipat; memasang
+      // batas justru berisiko memangkas huruf terakhir pada sebagian
+      // mesin teks.
+    );
+    final pb = ui.ParagraphBuilder(gaya)
+      ..pushStyle(ui.TextStyle(
+        color: const Color(0xFF000000),
+        fontFamily: 'monospace',
+        fontSize: ukuran,
+        fontWeight: tebal ? FontWeight.w900 : FontWeight.normal,
+      ))
+      ..addText(teks);
+    return pb.build()..layout(ui.ParagraphConstraints(width: lebar));
   }
 }
 

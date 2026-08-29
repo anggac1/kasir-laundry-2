@@ -893,6 +893,18 @@ Sekarang `jalankan.bat` menerapkannya **setiap kali dijalankan**, di luar blok y
 
 `setup_lokal.bat` tidak lagi mengerjakannya, supaya tidak ada dua tempat yang mengatur hal yang sama.
 
+### Pratinjau sebelum membagikan, dan dua bug format
+
+Tombol **Bagikan ke Pelanggan** sekarang membuka layar pratinjau lebih dulu, dengan tiga tab: **Teks**, **Gambar**, **PDF**. Berkas yang ditampilkan adalah berkas yang sama persis yang nanti dikirim, jadi hasilnya bisa dicek dari emulator yang tidak punya WhatsApp.
+
+Memeriksa PDF yang Anda kirim menemukan dua kesalahan nyata:
+
+**1. Setiap baris di PDF melipat jadi dua.** Ukuran hurufnya dipatok 8,5 pt, padahal kertas 58mm dengan margin 6mm hanya menyisakan 130 pt — cukup untuk 25 karakter, bukan 32. Sekarang ukurannya **dihitung dari lebar kertas**: `ruang / (jumlah kolom x 0,6)`, menghasilkan sekitar 7,1 pt untuk 32 kolom. Diuji ulang: tidak ada lagi baris yang melipat.
+
+**2. Tag ukuran tidak berpengaruh di PDF.** Semua baris tercetak setinggi 8,5 pt, termasuk `[B2]`. Sebabnya PDF dibuat dari **teks polos**, yang memang tidak menyimpan informasi ukuran. Sekarang PDF digambar **baris per baris dari daftar BarisStruk**, sama seperti gambar dan kertas, jadi `[B2]` benar-benar dua kali besar (diukur: 14,2 pt vs 7,1 pt) dan `[B]` benar-benar tebal.
+
+**3. Baris berskala menggantung di output teks.** Di kertas, `[B2]` memakai 16 kolom tapi hurufnya dua kali lebar, jadi tetap memenuhi 32 kolom. Teks biasa tidak punya ukuran huruf, sehingga 16 kolom apa adanya terlihat menggantung di kiri — persis yang Anda lihat pada baris `TOTAL   Rp12.000`. Perataannya sekarang dihitung terhadap lebar kertas penuh, dan celah `[>]`-nya dilebarkan sebanding.
+
 ### Soal ukuran aplikasi
 
 APK dari GitHub Actions sekitar **22,5 MB**, tapi di HP terbaca sekitar **50 MB**. Ini wajar, bukan tanda ada yang salah.

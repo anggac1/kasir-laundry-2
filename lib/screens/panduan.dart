@@ -618,13 +618,22 @@ const _lanjutan = <_Butir>[
     ikon: Icons.format_size,
     isi: 'Tambahkan angka di dalam tag untuk mengatur besar huruf. Angka 1 '
         'sampai 8, dan 1 berarti ukuran biasa.',
-    catatan: '[C2]LAUNDRY JAYA   tengah, dua kali besar\n'
+    catatan: '[C1.5]NAMA TOKO    tengah, lebih tinggi, tetap 32 kolom\n'
+        '[C2]LAUNDRY JAYA   tengah, dua kali besar\n'
         '[BC3]LUNAS           tebal, tengah, tiga kali\n'
         '[R2]Rp50.000        kanan, dua kali\n\n'
         'Baris tanpa angka tetap berukuran biasa, jadi template lama tidak '
         'perlu diubah. [H] sendiri masih berarti dua kali besar.\n\n'
         'Ingat, huruf makin besar berarti makin sedikit yang muat: pada '
-        'kertas 32 kolom, ukuran 2 hanya muat 16 huruf, ukuran 3 muat 10.',
+        'kertas 32 kolom, ukuran 2 hanya muat 16 huruf, ukuran 3 muat 10.'
+        '\n\n'
+        'Butuh yang cuma sedikit lebih besar? Pakai pecahan, misalnya '
+        '[C1.5]. Hurufnya jadi dua kali lebih TINGGI tapi lebarnya tetap, '
+        'jadi barisnya masih muat 32 huruf penuh.\n\n'
+        'Kenapa lebarnya tidak bisa 1,5 kali? Printer thermal hanya '
+        'mengenal kelipatan bulat untuk lebar maupun tinggi. Yang bisa '
+        'dilakukan adalah menaikkan tingginya saja, dan itulah yang '
+        'dikerjakan pecahan di sini.',
   ),
   _Butir(
     'Menyimpan template, lima laci',
@@ -764,16 +773,18 @@ const _lanjutan = <_Butir>[
     langkah: [
       'Buka notanya dari beranda',
       'Tekan Bagikan ke Pelanggan',
-      'Centang formatnya, boleh lebih dari satu',
+      'Periksa hasilnya di tiga tab: Teks, Gambar, PDF',
+      'Tekan Bagikan Sekarang, centang formatnya',
       'Pilih aplikasi tujuannya di menu berbagi bawaan HP',
     ],
     catatan: 'Teks   - langsung terbaca di chat, tapi ukuran huruf tidak '
         'ikut karena WhatsApp tidak mengenalnya\n'
         'PDF    - rapi, bisa dicetak ulang pelanggan\n'
         'Gambar - paling mirip struk asli, ukuran huruf ikut terlihat\n\n'
-        'Isinya sama persis dengan yang tampil di Pratinjau, termasuk '
-        'perataan dan lebar kolomnya. Tidak ada nomor WhatsApp yang perlu '
-        'diisi: berkasnya diserahkan ke menu berbagi bawaan HP.',
+        'Layar pratinjau menampilkan ketiganya apa adanya sebelum dikirim, '
+        'jadi tidak perlu menebak hasilnya.\n\n'
+        'Tidak ada nomor WhatsApp yang perlu diisi: berkasnya diserahkan '
+        'ke menu berbagi bawaan HP.',
   ),
   _Butir(
     'Kiat memakai kertas lebih hemat',

@@ -53,18 +53,27 @@ class EscPos {
     ]);
   }
 
-  // Skala 1 sampai 8, batas perangkat kerasnya. 1 berarti ukuran normal.
+  // Lebar dan tinggi diatur TERPISAH, 1 sampai 8 masing-masing.
+  //
+  // Inilah yang memungkinkan ukuran "setengah": lebar 1 tinggi 2 memberi
+  // huruf yang lebih tinggi tapi tetap selebar biasa, jadi satu barisnya
+  // masih muat 32 kolom. Kelipatan pecahan pada lebar tidak mungkin,
+  // perangkat kerasnya memang hanya mengenal bilangan bulat.
   //
   // Dua perintah dikirim sekaligus karena printer murah tidak seragam:
   // GS ! dipahami mayoritas, ESC ! dipahami sebagian printer lama yang
-  // mengabaikan GS !. ESC ! hanya punya satu tingkat, jadi ia dinyalakan
-  // untuk skala berapa pun di atas 1.
-  void besar(int skala) {
-    final n = skala.clamp(1, 8) - 1;
+  // mengabaikan GS !. ESC ! cuma punya satu tingkat, jadi dinyalakan
+  // untuk ukuran apa pun di atas normal.
+  void besar(int skalaLebar, [int? skalaTinggi]) {
+    final w = skalaLebar.clamp(1, 8) - 1;
+    final h = (skalaTinggi ?? skalaLebar).clamp(1, 8) - 1;
     // GS ! : 4 bit atas = lebar, 4 bit bawah = tinggi.
-    _b.addAll([_gs, 0x21, (n << 4) | n]);
+    _b.addAll([_gs, 0x21, (w << 4) | h]);
     // ESC ! : 0x20 lebar dobel, 0x10 tinggi dobel.
-    _b.addAll([_esc, 0x21, n > 0 ? 0x30 : 0x00]);
+    var esc = 0x00;
+    if (w > 0) esc |= 0x20;
+    if (h > 0) esc |= 0x10;
+    _b.addAll([_esc, 0x21, esc]);
   }
 
   void teks(String s) {
@@ -151,12 +160,12 @@ class EscPos {
     // jadi ESC E harus selalu menyusul sesudahnya.
     for (final b in baris) {
       p.rata(b.rata);
-      p.besar(b.skala);
+      p.besar(b.skalaLebar, b.skalaTinggi);
       p.tebal(b.tebal);
       p.teks(b.teks);
     }
 
-    p.besar(1);
+    p.besar(1, 1);
     p.tebal(false);
     p.rata(rataKiri);
     if (ketajaman >= 1) p.cetakGanda(false);

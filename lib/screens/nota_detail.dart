@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../db/db.dart';
-import '../export/bagikan_nota.dart';
 import '../models/models.dart';
 import '../store/settings.dart';
 import '../ui/umum.dart';
@@ -10,6 +9,7 @@ import 'beranda.dart' show LencanaBayar;
 import 'dialog_cetak.dart';
 import 'nota_baru.dart';
 import 'pratinjau.dart';
+import 'pratinjau_bagikan.dart';
 
 class NotaDetailScreen extends StatefulWidget {
   final int notaId;
@@ -121,19 +121,18 @@ class _NotaDetailScreenState extends State<NotaDetailScreen> {
     await _muat();
   }
 
-  // #Mengirim nota ke pelanggan lewat menu berbagi bawaan HP
+  // #Melihat dulu apa yang akan diterima pelanggan, baru dikirim
+  //
+  // Lewat pratinjau, bukan langsung ke menu berbagi: hasil teks, gambar,
+  // dan PDF berbeda satu sama lain, dan di emulator tidak ada WhatsApp
+  // untuk mengeceknya.
   Future<void> _bagikan() async {
     final n = _nota;
     if (n == null) return;
-    final format = await pilihFormatBagikan(context);
-    if (format == null || format.isEmpty || !mounted) return;
-
-    pesan(context, 'Menyiapkan berkas...');
-    final ok = await BagikanNota.instance.bagikan(context, n, format);
-    if (!mounted) return;
-    if (!ok) {
-      pesan(context, 'Gagal menyiapkan berkas untuk dibagikan.', galat: true);
-    }
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => PratinjauBagikanScreen(nota: n)),
+    );
   }
 
   @override

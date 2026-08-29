@@ -492,7 +492,7 @@ class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
             ),
           )
         else
-          KertasStruk(baris: baris, lebar: s.lebarKertas),
+          KertasStrukPutih(baris: baris, lebar: s.lebarKertas),
         const SizedBox(height: 16),
         OutlinedButton.icon(
           onPressed: () {

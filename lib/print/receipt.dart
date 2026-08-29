@@ -51,18 +51,30 @@ class BarisStruk {
   final int rata;
   final bool tebal;
 
-  // 1 = ukuran normal. 2 berarti dua kali lebar dan tinggi, dan seterusnya
-  // sampai 8, yang merupakan batas perangkat kerasnya.
-  final int skala;
+  // Lebar dan tinggi huruf DIPISAH, karena printer thermal memang
+  // mengaturnya terpisah lewat perintah GS !.
+  //
+  // Inilah yang membuat ukuran "setengah" mungkin: lebar 1 tinggi 2
+  // menghasilkan huruf yang lebih tinggi tapi selebar biasa, jadi tetap
+  // muat 32 kolom. Perangkat kerasnya hanya mengenal kelipatan bulat
+  // 1 sampai 8, jadi 1,5 kali lebar tidak akan pernah bisa.
+  final int skalaLebar;
+  final int skalaTinggi;
 
   const BarisStruk(
     this.teks, {
     this.rata = EscPos.rataKiri,
     this.tebal = false,
-    this.skala = 1,
-  });
+    int skala = 1,
+    int? skalaLebar,
+    int? skalaTinggi,
+  })  : skalaLebar = skalaLebar ?? skala,
+        skalaTinggi = skalaTinggi ?? skala;
 
-  bool get besar => skala > 1;
+  // Lebar yang menentukan berapa karakter yang muat dalam satu baris.
+  int get skala => skalaLebar;
+
+  bool get besar => skalaLebar > 1 || skalaTinggi > 1;
 }
 
 // Mesin template struk.
@@ -74,7 +86,8 @@ class BarisStruk {
 //   [>] dorong sisanya ke kanan, untuk "TOTAL ....... Rp50.000"
 // Baris berisi --- atau === menjadi garis pemisah selebar kertas.
 class Struk {
-  static final _tag = RegExp(r'^\[([A-Za-z0-9]{1,6})\]');
+  // Titik dan koma ikut diterima supaya [C1.5] terbaca sebagai tag.
+  static final _tag = RegExp(r'^\[([A-Za-z0-9.,]{1,8})\]');
   static final _garis = RegExp(r'^(-{3,}|={3,}|\*{3,})$');
   static final _syarat = RegExp(r'^\[\?([a-z0-9_]+)\]');
 
@@ -157,10 +170,24 @@ class Struk {
       var t = b.teks;
       if (t.length > efektif) t = t.substring(0, efektif);
 
+      // Baris berskala dipetakan kembali ke lebar kertas penuh.
+      //
+      // Di kertas, [B2] memakai 16 kolom tapi hurufnya dua kali lebar,
+      // jadi tetap memenuhi 32 kolom. Teks biasa tidak punya ukuran
+      // huruf, sehingga 16 kolom apa adanya terlihat menggantung di kiri
+      // dan tidak sejajar dengan baris lain. Perataannya karena itu
+      // dihitung terhadap lebar kertas penuh.
+      final ruang = b.skala > 1 ? lebar : efektif;
+
       if (b.rata == EscPos.rataTengah) {
-        t = ' ' * ((efektif - t.length) ~/ 2) + t;
+        t = ' ' * ((ruang - t.length) ~/ 2) + t;
       } else if (b.rata == EscPos.rataKanan) {
-        t = ' ' * (efektif - t.length) + t;
+        t = ' ' * (ruang - t.length) + t;
+      } else if (b.skala > 1) {
+        // Baris rata kiri berskala yang memakai [>] sudah berisi spasi
+        // pengatur di tengahnya. Spasinya dilebarkan sebanding, supaya
+        // kolom kanannya tetap mentok ke kanan.
+        t = _regangkan(t, ruang);
       }
       buf.writeln(rapikan ? t.trimRight() : t);
     }
@@ -168,9 +195,42 @@ class Struk {
     return rapikan ? hasil.trimRight() : hasil;
   }
 
+  // #Melebarkan celah spasi terpanjang supaya baris pas selebar [lebar]
+  static String _regangkan(String t, int lebar) {
+    if (t.length >= lebar) return t;
+    final celah = RegExp(r'\s{2,}').allMatches(t).toList();
+    if (celah.isEmpty) return t;
+    // Celah terpanjang dianggap sebagai hasil tag [>].
+    final c = celah.reduce((a, b) =>
+        (b.end - b.start) > (a.end - a.start) ? b : a);
+    final tambah = lebar - t.length;
+    return t.substring(0, c.start) +
+        ' ' * (c.end - c.start + tambah) +
+        t.substring(c.end);
+  }
+
   // Huruf berskala 2 memakan dua kali lebar, jadi kolomnya tinggal separuh.
+  // Berapa karakter yang muat pada satu baris berskala [skala].
+  //
+  // Batas atasnya lebar kertas itu sendiri, bukan kLebarMaks. Dengan
+  // kLebarMaks, kertas sempit bisa menerima baris lebih panjang daripada
+  // kertasnya dan hasilnya melewati tepi.
   static int lebarEfektif(int lebar, int skala) =>
-      (lebar ~/ skala.clamp(1, 8)).clamp(1, kLebarMaks);
+      (lebar ~/ skala.clamp(1, 8)).clamp(1, lebar);
+
+  // Panjang garis pemisah supaya benar-benar mengisi lebar kertas.
+  //
+  // Baris berskala memakai lebih sedikit karakter, tapi tiap karakternya
+  // selebar [skala] kolom. Pembagian yang tidak bulat menyisakan ruang
+  // kosong di ujung kanan: pada kertas 32 dengan skala 3, 10 karakter
+  // hanya menutup 30 kolom. Sisanya ditambal dengan menaikkan panjangnya
+  // satu karakter selama masih muat.
+  static int panjangGaris(int lebar, int skala) {
+    final s = skala.clamp(1, 8);
+    final dasar = lebarEfektif(lebar, s);
+    // Tambah satu hanya bila hasilnya tetap tidak melewati kertas.
+    return (dasar + 1) * s <= lebar ? dasar + 1 : dasar;
+  }
 
   static Map<String, String> _varsNota(
     Nota n,
@@ -252,7 +312,12 @@ class Struk {
 
     final t = teks.trim();
     if (t.isNotEmpty && _garis.hasMatch(t)) {
-      return [BarisStruk(t[0] * efektif, tebal: p.tebal, skala: p.skala)];
+      return [
+        BarisStruk(t[0] * panjangGaris(lebar, p.skala),
+            tebal: p.tebal,
+            skalaLebar: p.skalaLebar,
+            skalaTinggi: p.skalaTinggi)
+      ];
     }
 
     final pisah = teks.indexOf('[>]');
@@ -263,26 +328,45 @@ class Struk {
 
       if (sisa >= 1) {
         return [
-          BarisStruk(kiri + ' ' * sisa + kanan, tebal: p.tebal, skala: p.skala)
+          BarisStruk(kiri + ' ' * sisa + kanan,
+              tebal: p.tebal,
+              skalaLebar: p.skalaLebar,
+              skalaTinggi: p.skalaTinggi)
         ];
       }
       // Tidak muat sebaris: kiri di atas, kanan rata kanan di bawahnya.
       return [
         for (final l in _bungkus(kiri, efektif))
-          BarisStruk(l, tebal: p.tebal, skala: p.skala),
+          BarisStruk(l,
+              tebal: p.tebal,
+              skalaLebar: p.skalaLebar,
+              skalaTinggi: p.skalaTinggi),
         BarisStruk(kanan,
-            rata: EscPos.rataKanan, tebal: p.tebal, skala: p.skala),
+            rata: EscPos.rataKanan,
+            tebal: p.tebal,
+            skalaLebar: p.skalaLebar,
+            skalaTinggi: p.skalaTinggi),
       ];
     }
 
     // Baris kosong dipertahankan, dipakai untuk mengatur jarak.
     if (teks.isEmpty) {
-      return [BarisStruk('', rata: p.rata, tebal: p.tebal, skala: p.skala)];
+      return [
+        BarisStruk('',
+            rata: p.rata,
+            tebal: p.tebal,
+            skalaLebar: p.skalaLebar,
+            skalaTinggi: p.skalaTinggi)
+      ];
     }
 
     return [
       for (final l in _bungkus(teks, efektif))
-        BarisStruk(l, rata: p.rata, tebal: p.tebal, skala: p.skala),
+        BarisStruk(l,
+            rata: p.rata,
+            tebal: p.tebal,
+            skalaLebar: p.skalaLebar,
+            skalaTinggi: p.skalaTinggi),
     ];
   }
 
@@ -322,7 +406,8 @@ class Struk {
     var s = raw;
     var rata = EscPos.rataKiri;
     var tebal = false;
-    var skala = 1;
+    var skalaLebar = 1;
+    var skalaTinggi = 1;
     String? syarat;
 
     // [?kunci] dibaca lebih dulu karena bentuknya berbeda dari tag biasa.
@@ -338,11 +423,26 @@ class Struk {
       final isi = m.group(1)!.toUpperCase();
 
       // Angka di dalam tag berarti ukuran huruf: [C2] tengah ukuran dua.
-      // Dibaca sebagai satu bilangan supaya [H10] tidak terbaca 1 lalu 0.
-      final angka = RegExp(r'\d+').firstMatch(isi);
-      if (angka != null) skala = int.parse(angka.group(0)!).clamp(1, 8);
+      // Boleh pecahan, misalnya [C1.5], dan dibaca sebagai satu bilangan
+      // supaya [H10] tidak terbaca 1 lalu 0.
+      //
+      // Pecahan diwujudkan sebagai huruf yang lebih TINGGI tanpa
+      // melebar: 1,5 menjadi lebar 1 tinggi 2. Printer thermal hanya
+      // mengenal kelipatan bulat untuk lebar maupun tinggi, jadi 1,5
+      // kali lebar memang tidak mungkin, tapi 1,5 kali "besar" secara
+      // penampilan bisa. Untungnya baris seperti itu tetap muat 32
+      // kolom, tidak seperti [C2] yang cuma muat 16.
+      final angka = RegExp(r'\d+(?:[.,]\d+)?').firstMatch(isi);
+      if (angka != null) {
+        final n = double.tryParse(angka.group(0)!.replaceAll(',', '.')) ?? 1.0;
+        final utuh = n.floor().clamp(1, 8);
+        skalaLebar = utuh;
+        // Sisa pecahan 0,5 ke atas dibulatkan menjadi satu tingkat
+        // tinggi tambahan.
+        skalaTinggi = (n - n.floor() >= 0.5 ? utuh + 1 : utuh).clamp(1, 8);
+      }
 
-      for (final c in isi.replaceAll(RegExp(r'\d'), '').split('')) {
+      for (final c in isi.replaceAll(RegExp(r'[\d.,]'), '').split('')) {
         switch (c) {
           case 'L':
             rata = EscPos.rataKiri;
@@ -354,12 +454,15 @@ class Struk {
             tebal = true;
           case 'H':
             // [H] tanpa angka tetap berarti dua kali besar, seperti dulu.
-            if (angka == null) skala = 2;
+            if (angka == null) {
+              skalaLebar = 2;
+              skalaTinggi = 2;
+            }
         }
       }
       s = s.substring(m.end);
     }
-    return _Parsed(s, rata, tebal, skala, syarat);
+    return _Parsed(s, rata, tebal, skalaLebar, skalaTinggi, syarat);
   }
 }
 
@@ -367,8 +470,13 @@ class _Parsed {
   final String teks;
   final int rata;
   final bool tebal;
-  final int skala;
+  final int skalaLebar;
+  final int skalaTinggi;
   final String? syarat;
 
-  const _Parsed(this.teks, this.rata, this.tebal, this.skala, this.syarat);
+  const _Parsed(this.teks, this.rata, this.tebal, this.skalaLebar,
+      this.skalaTinggi, this.syarat);
+
+  // Lebar yang menentukan berapa karakter muat dalam satu baris.
+  int get skala => skalaLebar;
 }
