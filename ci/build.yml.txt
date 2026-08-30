@@ -89,7 +89,7 @@ jobs:
       # Kerangka folder android/ dibuat otomatis oleh Flutter,
       # jadi tidak perlu disimpan di repo.
       - name: Buat kerangka proyek Android
-        run: flutter create . --project-name laundry_pos --org id.laundry --platforms=android
+        run: flutter create . --project-name laundry_pos --org id.kasirlaundry --platforms=android
 
       - name: Kembalikan berkas proyek
         run: |

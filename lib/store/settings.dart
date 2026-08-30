@@ -216,6 +216,25 @@ class Settings {
   Future<void> setPrinterTerakhir(List<String> v) =>
       _p.setStringList('printer_cache', v.take(30).toList());
 
+  // Lebar gambar nota yang dibagikan, dalam piksel.
+  //
+  // Ini UKURAN gambarnya, bukan ketajaman: 800 berarti gambarnya
+  // benar-benar selebar 800 piksel. Struknya digambar ulang seukuran
+  // itu, jadi tulisannya tetap halus di ukuran berapa pun.
+  int get lebarGambar =>
+      (_p.getInt('share_image_width') ?? 800).clamp(400, 2000);
+  Future<void> setLebarGambar(int v) =>
+      _p.setInt('share_image_width', v.clamp(400, 2000));
+
+  // Pola nama berkas nota yang dibagikan ke pelanggan.
+  //
+  // Bawaannya tanpa nomor nota: kode internal seperti LDY-260830-001
+  // tidak ada gunanya bagi pelanggan dan terlihat tidak rapi.
+  String get polaNamaBerkas =>
+      _p.getString('share_filename') ?? 'Nota {nama} {tanggal}';
+  Future<void> setPolaNamaBerkas(String v) =>
+      _p.setString('share_filename', v.trim().isEmpty ? 'Nota' : v.trim());
+
   // Ketajaman cetak, 0 sampai 3. 0 berarti bawaan printer, tanpa
   // perintah tambahan sama sekali.
   //
@@ -275,6 +294,17 @@ class Settings {
 
   // Kembalikan seluruh setelan printer ke bawaan, yang memang sudah
   // cocok untuk RPP02N: 58mm, tanpa pisau, Font A.
+  // Kata pengantar yang menemani berkas saat dikirim ke pelanggan.
+  //
+  // Yang dikirim BUKAN isi struknya - struknya sudah ada di gambar atau
+  // PDF yang dilampirkan. Ini kalimat sapaan yang muncul di atas
+  // lampiran, seperti orang mengirim pesan biasa.
+  String get pesanPengantar =>
+      _p.getString('share_message') ??
+      'Terima kasih sudah laundry di {toko}. Berikut struknya.';
+  Future<void> setPesanPengantar(String v) =>
+      _p.setString('share_message', v.trim());
+
   Future<void> resetPrinter() async {
     await _p.remove('paper_chars');
     await _p.remove('small_font');
@@ -282,5 +312,34 @@ class Settings {
     await _p.remove('feed_lines');
     await _p.remove('print_darkness');
     await _p.remove('print_slowness');
+  }
+
+  // #Mengembalikan SEMUA setelan ke bawaan
+  //
+  // Laci template sengaja TIDAK ikut dihapus. Isinya template yang
+  // disusun sendiri oleh pengguna dan bisa jadi hasil kerja berjam-jam;
+  // menghapusnya diam-diam lewat tombol yang tertulis "setelan" adalah
+  // kejutan yang tidak bisa dibatalkan. Laci punya tombol kosongkannya
+  // sendiri di layar Template.
+  Future<void> resetSemuaSetelan() async {
+    const kunci = [
+      // Identitas
+      'shop_name', 'shop_address', 'shop_phone',
+      // Kertas dan huruf
+      'paper_chars', 'small_font', 'auto_cut', 'feed_lines',
+      'print_darkness', 'print_slowness',
+      // Template yang sedang dipakai
+      'tpl_main', 'tpl_item',
+      // Berbagi
+      'share_filename', 'share_image_width', 'share_message',
+      // Nota
+      'copies', 'copy_labels', 'use_due_date', 'debt_auto',
+      'extra_fields', 'due_days',
+      // Draf yang belum selesai
+      'draf_nota',
+    ];
+    for (final k in kunci) {
+      await _p.remove(k);
+    }
   }
 }

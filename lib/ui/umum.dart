@@ -87,7 +87,15 @@ Future<String?> dialogIsian(
           keyboardType: tipe,
           textCapitalization: kapital,
           maxLines: maxBaris,
-          decoration: InputDecoration(labelText: label, helperText: bantuan),
+          // helperMaxLines WAJIB diisi: bawaannya satu baris, dan
+          // keterangan yang lebih panjang dipotong jadi "Boleh pakai
+          // {nama}, {tanggal}, {tok..." - persis bagian yang paling
+          // perlu dibaca yang hilang.
+          decoration: InputDecoration(
+            labelText: label,
+            helperText: bantuan,
+            helperMaxLines: 4,
+          ),
         ),
         actions: [
           TextButton(

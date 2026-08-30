@@ -12,6 +12,7 @@ import '../print/escpos.dart';
 import '../print/printer_service.dart';
 import '../print/receipt.dart';
 import '../store/settings.dart';
+import '../utils/fmt.dart';
 
 // Membagikan satu nota ke pelanggan lewat menu berbagi bawaan HP.
 //
@@ -46,41 +47,95 @@ class BagikanNota {
         rapikan: true,
       );
 
-  // #Nama berkas yang aman dipakai di semua sistem berkas
-  static String _namaBerkas(Nota nota, String ekstensi) {
-    final kode = nota.kode.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '');
-    return 'nota_$kode.$ekstensi';
+  // #Nama berkas yang diterima pelanggan
+  //
+  // Kode internal seperti LDY-260830-001 tidak dipakai: pelanggan tidak
+  // punya urusan dengan nomor urut toko, dan itu terlihat tidak rapi di
+  // daftar berkas WhatsApp. Yang dipakai pola yang bisa diatur sendiri
+  // di Pengaturan, misalnya "Nota {nama} {tanggal}".
+  static String namaBerkas(Nota nota, String ekstensi) {
+    final pola = Settings.instance.polaNamaBerkas;
+    var hasil = pola
+        .replaceAll('{nama}', nota.pelanggan)
+        .replaceAll('{tanggal}', tanggalBerkas(nota.dibuat))
+        .replaceAll('{toko}', Settings.instance.namaToko)
+        .replaceAll('{no_nota}', nota.kode);
+    // Karakter yang dilarang di nama berkas dibuang, bukan diganti,
+    // supaya hasilnya tetap enak dibaca.
+    hasil = hasil.replaceAll(RegExp(r'[<>:"/\\|?*\x00-\x1F]'), ' ');
+    hasil = hasil.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (hasil.isEmpty) hasil = 'Nota';
+    // Batas aman nama berkas di Android.
+    if (hasil.length > 80) hasil = hasil.substring(0, 80).trim();
+    return '$hasil.$ekstensi';
   }
 
+  // #Tanggal untuk nama berkas, tanpa karakter yang dilarang
+  static String tanggalBerkas(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}-'
+      '${d.month.toString().padLeft(2, '0')}-${d.year}';
+
+  // #Kata pengantar yang menemani lampiran
+  //
+  // Ini SAPAAN, bukan isi struk. Struknya sudah ada di gambar atau PDF
+  // yang dilampirkan; menempelkan isinya lagi di badan pesan berarti
+  // pelanggan menerima struk dua kali dalam satu kiriman.
+  //
+  // Polanya bisa diatur sendiri, memakai placeholder yang sama dengan
+  // nama berkas supaya tidak ada kosakata baru yang perlu dihafal.
+  static String pesanPengantar(Nota nota) {
+    final toko = Settings.instance.namaToko.trim();
+    var hasil = Settings.instance.pesanPengantar
+        .replaceAll('{nama}', nota.pelanggan)
+        .replaceAll('{toko}', toko)
+        .replaceAll('{tanggal}', tanggalBerkas(nota.dibuat))
+        .replaceAll('{no_nota}', nota.kode)
+        .replaceAll('{total}', rupiah(nota.nilaiTampil));
+    hasil = hasil.trim();
+    // Pola yang dikosongkan pengguna tidak boleh membuat pesan hilang
+    // sama sekali, karena beberapa aplikasi chat menolak kiriman tanpa
+    // teks sedikit pun.
+    if (hasil.isEmpty) hasil = toko.isEmpty ? 'Nota Anda' : 'Nota dari $toko';
+    return hasil;
+  }
+
+  // Membagikan SATU format saja.
+  //
+  // Sebelumnya bisa beberapa sekaligus, tapi WhatsApp memperlakukan
+  // kiriman berisi banyak berkas sebagai album dan pesan pengantarnya
+  // sering hilang. Satu berkas per kiriman lebih dapat diandalkan, dan
+  // pelanggan tidak perlu memilih mana yang harus dibuka.
+  //
+  // Gambar dan PDF dikirim bersama KATA PENGANTAR dalam satu pesan,
+  // bukan bersama isi struknya: WhatsApp menaruh teks itu sebagai
+  // keterangan di bawah lampiran, jadi yang pantas di sana kalimat
+  // sapaan, seperti orang mengirim pesan biasa.
   Future<bool> bagikan(
     BuildContext context,
     Nota nota,
-    Set<FormatBagikan> format,
+    FormatBagikan format,
   ) async {
-    if (format.isEmpty) return false;
     try {
-      final berkas = <XFile>[];
       final teks = teksStruk(nota);
+      final pengantar = pesanPengantar(nota);
 
-      if (format.contains(FormatBagikan.pdf)) {
-        berkas.add(XFile(await _buatPdf(nota, teks)));
-      }
-      if (format.contains(FormatBagikan.gambar)) {
-        final path = await _buatGambar(nota);
-        if (path != null) berkas.add(XFile(path));
-      }
-
-      // Teks tanpa berkas dibagikan sebagai pesan biasa; kalau ada
-      // berkasnya, teks itu jadi keterangan yang menyertainya.
-      final adaTeks = format.contains(FormatBagikan.teks);
-      if (berkas.isEmpty) {
-        await Share.share(teks, subject: 'Nota ${nota.kode}');
-      } else {
-        await Share.shareXFiles(
-          berkas,
-          text: adaTeks ? teks : 'Nota ${nota.kode}',
-          subject: 'Nota ${nota.kode}',
-        );
+      switch (format) {
+        case FormatBagikan.teks:
+          await Share.share(teks, subject: pengantar);
+        case FormatBagikan.pdf:
+          await Share.shareXFiles(
+            [XFile(await _buatPdf(nota, teks))],
+            text: pengantar,
+            subject: pengantar,
+          );
+        case FormatBagikan.gambar:
+          final path = await _buatGambar(nota);
+          if (path == null) return false;
+          await Share.shareXFiles(
+            [XFile(path)],
+            text: pengantar,
+            subject: pengantar,
+          );
       }
       return true;
     } catch (_) {
@@ -89,14 +144,20 @@ class BagikanNota {
   }
 
   // #Struk dicetak ke PDF dengan huruf monospace, supaya kolomnya lurus
-  Future<String> buatPdf(Nota nota, String teks) => _buatPdf(nota, teks);
+  Future<String> buatPdf(Nota nota, String teks,
+          {List<BarisStruk>? barisLuar}) =>
+      _buatPdf(nota, teks, barisLuar: barisLuar);
 
-  Future<String?> buatGambar(Nota nota) => _buatGambar(nota);
+  Future<String?> buatGambar(Nota nota, {List<BarisStruk>? barisLuar}) =>
+      _buatGambar(nota, barisLuar: barisLuar);
 
-  Future<String> _buatPdf(Nota nota, String teks) async {
+  Future<String> _buatPdf(Nota nota, String teks,
+      {List<BarisStruk>? barisLuar}) async {
     final doc = pw.Document();
     final lebarKolom = Settings.instance.lebarKertas;
-    final baris = _baris(nota);
+    // Pratinjau template mengirim baris hasil teks yang SEDANG diketik.
+    // Tanpa ini, yang tampil selalu template terakhir yang tersimpan.
+    final baris = barisLuar ?? _baris(nota);
 
     // Lebar halaman mengikuti kertas struk, bukan A4.
     final lebarMm = lebarKolom <= 42 ? 58.0 : 80.0;
@@ -111,7 +172,32 @@ class BagikanNota {
     // sehingga hanya muat 25 karakter dari 32 dan setiap baris melipat
     // jadi dua.
     const kLebarCourier = 0.6;
-    final dasar = ruang / (lebarKolom * kLebarCourier);
+
+    // Ukuran dihitung dari baris TERLEBAR yang benar-benar ada, bukan
+    // dari asumsi semua baris berskala 1.
+    //
+    // Baris [B2] memakai 16 kolom tapi hurufnya dua kali besar, jadi
+    // lebar cetaknya tetap 32 kolom. Kalau ukurannya dihitung seolah
+    // semua baris berskala 1, baris berskala itu melebihi kertas dan
+    // paket pdf mengecilkannya diam-diam sampai muat. Itu sebabnya
+    // TOTAL sempat tercetak sama besar dengan baris biasa.
+    var kolomTerpakai = lebarKolom;
+    for (final b in baris) {
+      final efektif = Struk.lebarEfektif(lebarKolom, b.skalaLebar);
+      final panjang = b.teks.length > efektif ? efektif : b.teks.length;
+      final kolom = panjang * b.skalaLebar;
+      if (kolom > kolomTerpakai) kolomTerpakai = kolom;
+    }
+
+    // Disisakan 1 persen, jangan pas-pasan.
+    //
+    // Baris yang lebarnya PERSIS sama dengan ruang yang tersedia berada
+    // di ambang: pembulatan di dalam paket pdf bisa menganggapnya lebih
+    // lebar sedikit, lalu melipatnya ke baris kedua. Itulah sebabnya
+    // "sed do eiusmod tempor ut labore" pecah padahal hitungannya muat.
+    // Kelonggaran satu persen menghilangkan ambang itu tanpa terlihat.
+    const kelonggaran = 0.99;
+    final dasar = ruang * kelonggaran / (kolomTerpakai * kLebarCourier);
     final monospace = pw.Font.courier();
     final monospaceTebal = pw.Font.courierBold();
 
@@ -170,7 +256,7 @@ class BagikanNota {
     );
 
     final dir = await getApplicationDocumentsDirectory();
-    final path = '${dir.path}/${_namaBerkas(nota, 'pdf')}';
+    final path = '${dir.path}/${namaBerkas(nota, 'pdf')}';
     await File(path).writeAsBytes(await doc.save(), flush: true);
     return path;
   }
@@ -180,27 +266,29 @@ class BagikanNota {
   // Sengaja tidak memakai pohon widget di luar layar: cara itu bergantung
   // pada API dalaman Flutter yang berubah antar versi. Menggambar dengan
   // dart:ui memakai API yang stabil dan hasilnya bisa dipastikan.
-  Future<String?> _buatGambar(Nota nota) async {
+  Future<String?> _buatGambar(Nota nota,
+      {List<BarisStruk>? barisLuar}) async {
     try {
-      final baris = _baris(nota);
+      final baris = barisLuar ?? _baris(nota);
       final lebarKolom = Settings.instance.lebarKertas;
 
-      // Digambar 4x lebih besar daripada ukuran layar, lalu disimpan apa
-      // adanya. Hasilnya tajam saat dibuka besar di WhatsApp, dan tidak
-      // terlihat sebagai gambar mungil di daftar chat.
-      const skalaPiksel = 4.0;
-      const tepi = 16.0;
-      const dasarHuruf = 14.0;
-
-      // Lebar kertas DIUKUR dari font sungguhan, bukan ditebak.
+      // Lebar gambar diatur di Pengaturan, dalam piksel.
       //
-      // Versi sebelumnya memakai angka tetap 0,62 sebagai perkiraan lebar
-      // satu huruf monospace. Kalau font di HP ternyata lebih sempit,
-      // teksnya tidak memenuhi kanvas dan gambarnya jadi separuh kosong.
-      // Sekarang satu baris penuh diukur lebih dulu, dan hasilnya yang
-      // dipakai sebagai lebar kertas.
-      final lebarIsi = _ukurLebar('W' * lebarKolom, dasarHuruf);
-      final lebarTotal = lebarIsi + tepi * 2;
+      // Ukuran hurufnya dihitung MUNDUR dari lebar itu, bukan sebaliknya.
+      // Jadi gambar 800 piksel benar-benar 800 piksel dengan tulisan yang
+      // pas memenuhinya, bukan gambar kecil yang diperbesar.
+      final lebarTotal = Settings.instance.lebarGambar.toDouble();
+      final tepi = lebarTotal * 0.04;
+      final lebarIsi = lebarTotal - tepi * 2;
+
+      // Ukuran huruf yang membuat satu baris penuh pas selebar lebarIsi.
+      // Diukur dari font sungguhan, bukan menebak rasionya, lalu
+      // dikurangi satu persen supaya tidak berada di ambang melipat.
+      final lebarAcuan = _ukurLebar('0' * lebarKolom, 100.0);
+      final dasarHuruf = lebarIsi * 0.99 / lebarAcuan * 100.0;
+
+      // Digambar 1:1, karena ukurannya sudah ditentukan di atas.
+      const skalaPiksel = 1.0;
 
       // Tahap 1: susun tiap baris dan ukur tingginya lebih dulu.
       final paragraf = <ui.Paragraph>[];
@@ -274,7 +362,7 @@ class BagikanNota {
       if (data == null) return null;
 
       final dir = await getApplicationDocumentsDirectory();
-      final path = '${dir.path}/${_namaBerkas(nota, 'png')}';
+      final path = '${dir.path}/${namaBerkas(nota, 'png')}';
       await File(path).writeAsBytes(data.buffer.asUint8List(), flush: true);
       return path;
     } catch (_) {
@@ -327,101 +415,4 @@ class BagikanNota {
       ..addText(teks);
     return pb.build()..layout(ui.ParagraphConstraints(width: lebar));
   }
-}
-
-// Menanyakan format sebelum berbagi. Boleh lebih dari satu sekaligus.
-// Mengembalikan null bila dibatalkan.
-Future<Set<FormatBagikan>?> pilihFormatBagikan(BuildContext context) async {
-  final dipilih = <FormatBagikan>{FormatBagikan.teks};
-
-  return showDialog<Set<FormatBagikan>>(
-    context: context,
-    builder: (ctx) => StatefulBuilder(
-      builder: (ctx, setDialog) => AlertDialog(
-        title: const Text('Bagikan nota sebagai'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Boleh pilih lebih dari satu. Semuanya dikirim lewat menu '
-              'berbagi bawaan HP, jadi bisa ke WhatsApp, email, atau '
-              'disimpan ke folder.',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-            const SizedBox(height: 8),
-            _pilihan(
-              ctx,
-              setDialog,
-              dipilih,
-              FormatBagikan.teks,
-              Icons.text_fields,
-              'Teks',
-              'Langsung terbaca di chat. Ukuran huruf tidak ikut, '
-                  'karena WhatsApp tidak mengenalnya.',
-            ),
-            _pilihan(
-              ctx,
-              setDialog,
-              dipilih,
-              FormatBagikan.pdf,
-              Icons.picture_as_pdf_outlined,
-              'PDF',
-              'Rapi dan bisa dicetak ulang pelanggan.',
-            ),
-            _pilihan(
-              ctx,
-              setDialog,
-              dipilih,
-              FormatBagikan.gambar,
-              Icons.image_outlined,
-              'Gambar (PNG)',
-              'Paling mirip struk aslinya, ukuran huruf ikut terlihat.',
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Batal'),
-          ),
-          FilledButton(
-            onPressed: dipilih.isEmpty
-                ? null
-                : () => Navigator.pop(ctx, Set<FormatBagikan>.from(dipilih)),
-            child: const Text('Bagikan'),
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
-// #Satu baris pilihan format dengan kotak centang
-Widget _pilihan(
-  BuildContext ctx,
-  void Function(void Function()) setDialog,
-  Set<FormatBagikan> dipilih,
-  FormatBagikan nilai,
-  IconData ikon,
-  String judul,
-  String keterangan,
-) {
-  final aktif = dipilih.contains(nilai);
-  return CheckboxListTile(
-    value: aktif,
-    dense: true,
-    contentPadding: EdgeInsets.zero,
-    controlAffinity: ListTileControlAffinity.leading,
-    secondary: Icon(ikon, size: 20),
-    title: Text(judul, style: const TextStyle(fontSize: 14)),
-    subtitle: Text(keterangan, style: const TextStyle(fontSize: 11)),
-    onChanged: (v) => setDialog(() {
-      if (v == true) {
-        dipilih.add(nilai);
-      } else {
-        dipilih.remove(nilai);
-      }
-    }),
-  );
 }

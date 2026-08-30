@@ -1,4 +1,4 @@
-package id.laundry.laundry_pos
+package id.kasirlaundry.laundry_pos
 
 import android.content.Intent
 import android.net.Uri

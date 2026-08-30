@@ -22,16 +22,34 @@ class PratinjauBagikanScreen extends StatefulWidget {
   State<PratinjauBagikanScreen> createState() => _PratinjauBagikanState();
 }
 
-class _PratinjauBagikanState extends State<PratinjauBagikanScreen> {
+class _PratinjauBagikanState extends State<PratinjauBagikanScreen>
+    with SingleTickerProviderStateMixin {
   String? _gambarPath;
   String? _pdfPath;
   bool _memuat = true;
   String? _galat;
 
+  late final TabController _tabCtrl;
+  int _tab = 0;
+
   @override
   void initState() {
     super.initState();
+    _tabCtrl = TabController(length: 3, vsync: this)
+      ..addListener(() {
+        // index berubah dua kali per geseran: saat animasi mulai dan
+        // saat selesai. Cukup diperbarui kalau memang berbeda.
+        if (_tabCtrl.index != _tab && mounted) {
+          setState(() => _tab = _tabCtrl.index);
+        }
+      });
     _siapkan();
+  }
+
+  @override
+  void dispose() {
+    _tabCtrl.dispose();
+    super.dispose();
   }
 
   // #Membuat berkas yang sama persis dengan yang nanti dibagikan
@@ -55,46 +73,86 @@ class _PratinjauBagikanState extends State<PratinjauBagikanScreen> {
     }
   }
 
+  // #Membagikan format yang sedang dilihat, tanpa bertanya lagi
+  //
+  // Tidak ada dialog pilihan format: tabnya sudah menyatakan pilihan.
+  // Menanyakannya lagi setelah pengguna membuka tab yang diinginkan
+  // hanya menambah satu ketukan tanpa guna.
   Future<void> _bagikan() async {
-    final format = await pilihFormatBagikan(context);
-    if (format == null || format.isEmpty || !mounted) return;
-    final ok = await BagikanNota.instance.bagikan(context, widget.nota, format);
+    const urut = [FormatBagikan.teks, FormatBagikan.gambar, FormatBagikan.pdf];
+    final ok = await BagikanNota.instance
+        .bagikan(context, widget.nota, urut[_tab]);
     if (!mounted) return;
     if (!ok) pesan(context, 'Gagal menyiapkan berkas.', galat: true);
+  }
+
+  static const _namaFormat = ['Teks', 'Gambar', 'PDF'];
+
+  // #Ukuran huruf terbesar yang membuat satu baris penuh muat
+  //
+  // Ditebak lalu DIVERIFIKASI dengan mengukur ulang, sama seperti di
+  // KertasStruk. Rumus perbandingan saja tidak cukup: lebar teks tidak
+  // selalu tumbuh lurus mengikuti ukuran huruf, dan selisih kecil per
+  // huruf menumpuk sepanjang satu baris sampai terpotong.
+  static double _ukuranMuat(double ruang, int kolom) {
+    if (!ruang.isFinite || ruang <= 0) return 12;
+    const acuan = 20.0;
+
+    double ukur(double fs) {
+      final tp = TextPainter(
+        text: TextSpan(
+          text: '0' * kolom,
+          style: TextStyle(fontFamily: 'monospace', fontSize: fs),
+        ),
+        maxLines: 1,
+        textScaler: TextScaler.noScaling,
+        textDirection: TextDirection.ltr,
+      )..layout();
+      return tp.width;
+    }
+
+    var ukuran = ruang / ukur(acuan) * acuan;
+    for (var i = 0; i < 60; i++) {
+      if (ukur(ukuran) <= ruang) break;
+      ukuran -= 0.25;
+      if (ukuran < 6) return 6;
+    }
+    return ukuran;
   }
 
   @override
   Widget build(BuildContext context) {
     final teks = BagikanNota.teksStruk(widget.nota);
 
-    return DefaultTabController(
-      length: 3,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Pratinjau Bagikan'),
-          bottom: const TabBar(
-            tabs: [
-              Tab(icon: Icon(Icons.text_fields), text: 'Teks'),
-              Tab(icon: Icon(Icons.image_outlined), text: 'Gambar'),
-              Tab(icon: Icon(Icons.picture_as_pdf_outlined), text: 'PDF'),
-            ],
-          ),
-        ),
-        body: TabBarView(
-          children: [
-            _tabTeks(teks),
-            _tabGambar(),
-            _tabPdf(),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Pratinjau Bagikan'),
+        bottom: TabBar(
+          controller: _tabCtrl,
+          tabs: const [
+            Tab(icon: Icon(Icons.text_fields), text: 'Teks'),
+            Tab(icon: Icon(Icons.image_outlined), text: 'Gambar'),
+            Tab(icon: Icon(Icons.picture_as_pdf_outlined), text: 'PDF'),
           ],
         ),
-        bottomNavigationBar: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: FilledButton.icon(
-              onPressed: _bagikan,
-              icon: const Icon(Icons.share_outlined),
-              label: const Text('Bagikan Sekarang'),
-            ),
+      ),
+      body: TabBarView(
+        controller: _tabCtrl,
+        children: [
+          _tabTeks(teks),
+          _tabGambar(),
+          _tabPdf(),
+        ],
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: FilledButton.icon(
+            onPressed: _bagikan,
+            icon: const Icon(Icons.share_outlined),
+            // Tombolnya menyebut format yang sedang dilihat, supaya
+            // jelas apa yang akan terkirim.
+            label: Text('Bagikan ${_namaFormat[_tab]}'),
           ),
         ),
       ),
@@ -112,15 +170,28 @@ class _PratinjauBagikanState extends State<PratinjauBagikanScreen> {
             'tetap dipertahankan.',
           ),
           const SizedBox(height: 12),
+          // Ukurannya menyesuaikan lebar layar, bukan dipatok 12.
+          //
+          // Teks struk lebarnya tetap sebanyak kolom kertas; ukuran huruf
+          // yang dipatok membuatnya melipat pada kertas lebar atau saat
+          // setelan Ukuran Font di HP dinaikkan. Skala sistem juga
+          // dimatikan, dengan alasan yang sama seperti di KertasStruk.
           KertasPutih(
-            child: SelectableText(
-              teks,
-              style: const TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 12,
-                height: 1.35,
-                color: Colors.black,
-              ),
+            child: LayoutBuilder(
+              builder: (context, batas) {
+                final lebarKolom = Settings.instance.lebarKertas;
+                final ukuran = _ukuranMuat(batas.maxWidth, lebarKolom);
+                return SelectableText(
+                  teks,
+                  textScaler: TextScaler.noScaling,
+                  style: TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: ukuran,
+                    height: 1.35,
+                    color: Colors.black,
+                  ),
+                );
+              },
             ),
           ),
           const SizedBox(height: 12),

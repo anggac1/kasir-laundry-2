@@ -22,76 +22,86 @@ class KertasStruk extends StatelessWidget {
   final List<BarisStruk> baris;
   final int lebar;
 
-  // Ukuran huruf dasar. Diisi hanya bila layarnya butuh ukuran khusus;
-  // biasanya dibiarkan null supaya menyesuaikan lebar yang tersedia.
-  final double? dasarHuruf;
-
-  const KertasStruk({
-    super.key,
-    required this.baris,
-    required this.lebar,
-    this.dasarHuruf,
-  });
-
-  // Ukuran huruf acuan saat mengukur. Nilainya tidak penting; yang
-  // dipakai hanya perbandingan lebar hasil ukur terhadap angka ini.
-  static const double _acuan = 20.0;
-
-  // #Mengukur lebar sebenarnya satu baris penuh, bukan menebak rasionya
-  //
-  // Rasio lebar huruf monospace berbeda antar HP. Menebaknya membuat
-  // teks kadang lebih lebar daripada ruang yang ada, dan Text yang
-  // kelebaran akan MELIPAT: itu sebabnya "TOTAL Rp5.000" pernah pecah
-  // jadi dua baris dan menyisakan "-" sendirian.
-  static double _ukurSatuBaris(int kolom) {
-    final tp = TextPainter(
-      text: TextSpan(
-        text: '0' * kolom,
-        style: const TextStyle(fontFamily: 'monospace', fontSize: _acuan),
-      ),
-      maxLines: 1,
-      textDirection: TextDirection.ltr,
-    )..layout();
-    return tp.width;
-  }
+  const KertasStruk({super.key, required this.baris, required this.lebar});
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, batas) {
-        final ruang = batas.maxWidth.isFinite ? batas.maxWidth : 320.0;
+    // Struk digambar pada ukuran TETAP, lalu SELURUHNYA dikecilkan oleh
+    // FittedBox sampai pas selebar ruang yang ada.
+    //
+    // Cara sebelumnya mencari ukuran huruf yang "kira-kira muat", dan itu
+    // terus meleset: lebar teks tidak tumbuh lurus mengikuti ukuran huruf,
+    // jadi berapa pun ukuran yang diperiksa, hasil gambar sungguhannya
+    // masih bisa lebih lebar. FittedBox tidak menebak sama sekali - ia
+    // mengukur hasil jadinya lalu mengecilkan seperlunya, jadi mustahil
+    // ada yang terpotong.
+    const dasar = 16.0;
 
-        // Ukuran huruf terbesar yang masih memuat satu baris penuh.
-        // Dikurangi setengah piksel sebagai jaga-jaga terhadap pembulatan
-        // saat menggambar, supaya tidak ada baris yang melipat.
-        final lebarAcuan = _ukurSatuBaris(lebar);
-        final dasar = dasarHuruf ?? ((ruang - 0.5) / lebarAcuan * _acuan);
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: baris.map((b) {
-            final efektif = Struk.lebarEfektif(lebar, b.skala);
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.topCenter,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ...baris.map((b) {
+            final efektif = Struk.lebarEfektif(lebar, b.skalaLebar);
             var t = b.teks;
-            if (t.length > efektif) t = t.substring(0, efektif);
+
+            // TIDAK dipotong di sini.
+            //
+            // Baris yang masuk ke sini sudah dipatahkan per kata oleh
+            // _bungkus() sewaktu disusun, jadi panjangnya pasti sudah
+            // muat. Pemotongan tambahan di layar hanya bisa merusak:
+            // baris 34 karakter pada kertas 32 terpangkas jadi
+            // "Total          Rp60.0" - itulah "Rp60.000" yang hilang
+            // ekornya. Kalau toh ada yang lebih panjang, biar FittedBox
+            // yang mengecilkan seluruhnya, bukan huruf yang dibuang.
+
+            // Perataan dikerjakan dengan SPASI, bukan dengan lebar kotak.
+            //
+            // Sebelumnya tiap baris dipaksa selebar kertas lewat
+            // SizedBox. Baris yang ternyata sedikit lebih lebar dipotong
+            // DI DALAM kotak itu, sehingga FittedBox tidak pernah melihat
+            // ada yang kelebihan dan tidak pernah mengecilkan.
+            //
+            // Dengan spasi, tiap baris selebar isinya sendiri, dan
+            // FittedBox bisa melihat baris terlebar lalu mengecilkan
+            // semuanya.
+            //
+            // Patokannya [efektif], BUKAN lebar kertas penuh.
+            //
+            // Struk.pratinjau() memakai lebar penuh karena hasilnya teks
+            // polos yang tidak punya ukuran huruf: di sana [B2] harus
+            // ditambal jadi 32 karakter supaya terlihat selebar kertas.
+            // Di layar hurufnya memang benar-benar dua kali lebar, jadi
+            // 16 karakter sudah memenuhi 32 kolom. Menambalnya sampai 32
+            // karakter membuat barisnya dua kali lebar kertas, dan
+            // FittedBox akan mengecilkan SELURUH struk jadi separuh.
+            // Angkanya beda supaya hasil gambarnya sama.
+            if (t.length < efektif) {
+              final sisa = efektif - t.length;
+              if (b.rata == 1) {
+                final kiri = sisa ~/ 2;
+                t = ' ' * kiri + t + ' ' * (sisa - kiri);
+              } else if (b.rata == 2) {
+                t = ' ' * sisa + t;
+              } else {
+                t = t + ' ' * sisa;
+              }
+            }
 
             // Lebar dan tinggi bisa berbeda, misalnya [C1.5] yang lebar
-            // 1 tinggi 2. Ukuran huruf mengikuti LEBAR, lalu tingginya
-            // diregangkan terpisah supaya persis seperti di kertas.
+            // 1 tinggi 2.
             final ukuran = dasar * b.skalaLebar;
             final regang = b.skalaTinggi / b.skalaLebar;
 
             final teks = Text(
               t.isEmpty ? ' ' : t,
-              textAlign: b.rata == 1
-                  ? TextAlign.center
-                  : (b.rata == 2 ? TextAlign.right : TextAlign.left),
-              // Kunci pengaman: satu baris struk harus tetap satu baris.
-              // Kalaupun perhitungan di atas meleset sedikit, hasilnya
-              // huruf terakhir terpotong, bukan barisnya pecah dua.
               maxLines: 1,
               softWrap: false,
-              overflow: TextOverflow.clip,
+              // Struk tidak ikut membesar mengikuti setelan Ukuran Font
+              // di HP, karena lebarnya ditentukan lebar kertas.
+              textScaler: TextScaler.noScaling,
               style: TextStyle(
                 fontFamily: 'monospace',
                 fontSize: ukuran,
@@ -113,9 +123,9 @@ class KertasStruk extends StatelessWidget {
                 child: teks,
               ),
             );
-          }).toList(),
-        );
-      },
+          }),
+        ],
+      ),
     );
   }
 }
@@ -160,9 +170,18 @@ Future<bool> tampilkanPratinjauBaris(
             Text(keterangan,
                 style: const TextStyle(fontSize: 12, color: Colors.grey)),
             const SizedBox(height: 10),
+            // LayoutBuilder di dalam SingleChildScrollView bisa menerima
+            // lebar tak terhingga. Dibungkus LayoutBuilder di LUAR
+            // scroll-nya, lebar yang pasti itu diteruskan ke bawah,
+            // sehingga penghitung ukuran huruf tidak pernah menebak.
             Flexible(
-              child: SingleChildScrollView(
-                child: KertasStrukPutih(baris: baris, lebar: lebar),
+              child: LayoutBuilder(
+                builder: (ctx, batas) => SingleChildScrollView(
+                  child: SizedBox(
+                    width: batas.maxWidth,
+                    child: KertasStrukPutih(baris: baris, lebar: lebar),
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 8),

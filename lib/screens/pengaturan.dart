@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../db/db.dart';
 import '../store/settings.dart';
 import '../ui/umum.dart';
 import 'ekspor_screen.dart';
+import 'hapus_data.dart';
 
 // Nama tingkat ketajaman dan kecepatan, dipakai di chip dan subtitle.
 const _namaKetajaman = ['Normal', 'Tebal', 'Lebih tebal', 'Paling tebal'];
@@ -75,21 +75,6 @@ class _PengaturanScreenState extends State<PengaturanScreen> {
     final daftar = [...s.fieldTambahan]..remove(nama);
     await s.setFieldTambahan(daftar);
     if (mounted) setState(() {});
-  }
-
-  Future<void> _hapusSemua() async {
-    final ok = await konfirmasiHapus(
-      context,
-      judul: 'Hapus semua nota?',
-      isi: 'Seluruh nota dan riwayat transaksi akan dihapus permanen dari '
-          'HP ini. Daftar layanan dan pengaturan tetap aman.\n\n'
-          'Tidak ada cadangan di server, jadi data TIDAK bisa dikembalikan.',
-      tombol: 'Hapus Semua',
-    );
-    if (!ok) return;
-    await DB.instance.kosongkanTransaksi();
-    if (!mounted) return;
-    pesan(context, 'Semua nota dihapus.');
   }
 
   // #Mengubah lebar kertas, sekaligus menjaga Font B tetap masuk akal
@@ -247,6 +232,7 @@ class _PengaturanScreenState extends State<PengaturanScreen> {
               pesan(context, 'Setelan printer dikembalikan ke bawaan.');
             },
           ),
+          const Divider(),
           _seksi('Kalau Hasil Cetak Pudar'),
           const Padding(
             padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -257,11 +243,13 @@ class _PengaturanScreenState extends State<PengaturanScreen> {
               style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ),
-          ListTile(
-            leading: const Icon(Icons.opacity),
-            title: const Text('1. Ketebalan tulisan'),
-            subtitle: Text('Sekarang: ${_namaKetajaman[s.ketajamanCetak]}'),
-          ),
+          // Tulisan biasa, BUKAN ListTile.
+          //
+          // Sebelumnya ini ListTile lengkap dengan ikon, jadi terlihat
+          // seperti tombol padahal tidak bisa ditekan sama sekali -
+          // yang diatur adalah chip di bawahnya.
+          _labelSetelan('1. Ketebalan tulisan',
+              'Sekarang: ${_namaKetajaman[s.ketajamanCetak]}'),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: Column(
@@ -293,11 +281,8 @@ class _PengaturanScreenState extends State<PengaturanScreen> {
               ],
             ),
           ),
-          ListTile(
-            leading: const Icon(Icons.speed),
-            title: const Text('2. Kecepatan cetak'),
-            subtitle: Text('Sekarang: ${_namaKelambatan[s.kelambatanCetak]}'),
-          ),
+          _labelSetelan('2. Kecepatan cetak',
+              'Sekarang: ${_namaKelambatan[s.kelambatanCetak]}'),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: Column(
@@ -531,14 +516,10 @@ class _PengaturanScreenState extends State<PengaturanScreen> {
           ),
           const Divider(),
           _seksi('Data'),
-          const ListTile(
-            leading: Icon(Icons.storage_outlined),
-            title: Text('Lokasi penyimpanan'),
-            subtitle: Text(
-                'Semua data tersimpan di HP ini (SQLite). Tidak ada server, '
-                'tidak ada akun, tidak ada pengiriman data keluar.'),
-            isThreeLine: true,
-          ),
+          _labelSetelan(
+              'Lokasi penyimpanan',
+              'Semua data tersimpan di HP ini (SQLite). Tidak ada server, '
+              'tidak ada akun, tidak ada pengiriman data keluar.'),
           ListTile(
             leading: const Icon(Icons.ios_share),
             title: const Text('Ekspor laporan'),
@@ -549,13 +530,24 @@ class _PengaturanScreenState extends State<PengaturanScreen> {
               MaterialPageRoute(builder: (_) => const EksporScreen()),
             ),
           ),
+          // Satu pintu untuk semua penghapusan, dengan centang.
+          //
+          // Android cuma punya "hapus cache" yang membabi buta. Di sini
+          // pengguna memilih sendiri, jadi membersihkan berkas yang
+          // menumpuk tidak harus ikut mengorbankan nota.
           ListTile(
-            leading: const Icon(Icons.delete_forever_outlined,
-                color: Colors.red),
-            title: const Text('Hapus semua nota',
-                style: TextStyle(color: Colors.red)),
-            subtitle: const Text('Tidak bisa dikembalikan'),
-            onTap: _hapusSemua,
+            leading: Icon(Icons.cleaning_services_outlined,
+                color: Colors.red.shade700),
+            title: Text('Hapus data',
+                style: TextStyle(color: Colors.red.shade700)),
+            subtitle: const Text(
+                'Pilih sendiri: berkas sementara, saran nama, semua nota, '
+                'atau setelan'),
+            isThreeLine: true,
+            onTap: () async {
+              await tampilkanHapusData(context);
+              if (mounted) setState(() {});
+            },
           ),
           const Divider(),
           const AboutListTile(
@@ -572,6 +564,26 @@ class _PengaturanScreenState extends State<PengaturanScreen> {
       ),
     );
   }
+
+  // Keterangan yang memang cuma dibaca, bukan tombol.
+  //
+  // Dibedakan dari ListTile supaya tidak ada yang mengetuknya lalu
+  // bingung kenapa tidak terjadi apa-apa: tanpa ikon, tanpa tanda
+  // panah, dan menjorok sejajar dengan keterangan lain.
+  Widget _labelSetelan(String judul, String isi) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(judul,
+                style: const TextStyle(
+                    fontSize: 15, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 2),
+            Text(isi,
+                style: const TextStyle(fontSize: 13, color: Colors.grey)),
+          ],
+        ),
+      );
 
   // JudulSeksi berpadding kecil, digeser agar sejajar dengan ListTile.
   Widget _seksi(String teks) => Padding(
