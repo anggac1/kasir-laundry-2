@@ -157,6 +157,24 @@ class ItemNota {
       );
 }
 
+// Membaca isian "uang diterima" dari layar.
+//
+// Kosong DAN nol sama-sama berarti "tidak dicatat".
+//
+// Alasannya dari cara orang memakai: mengetik 0 di kolom uang bukan
+// berarti pelanggan menyerahkan nol rupiah, tapi berarti belum bayar -
+// sama saja dengan tidak mengisinya. Kalau 0 diperlakukan sebagai angka
+// sungguhan, struk mencetak "Kurang Rp60.000" padahal maksudnya cuma
+// belum ada pembayaran, dan itu sudah dinyatakan baris status bayar.
+//
+// Disaring di SINI, sebelum masuk ke Nota, supaya seluruh aplikasi
+// menerima data yang sudah bersih dan tidak perlu menangani nol di
+// banyak tempat.
+int? bacaUangDiterima(String teks) {
+  final n = int.tryParse(teks.trim());
+  return (n == null || n == 0) ? null : n;
+}
+
 class Nota {
   int? id;
   String kode;
@@ -219,24 +237,12 @@ class Nota {
     return uang == null ? null : uang - total;
   }
 
-  // Uang yang diterima lebih kecil daripada tagihan.
-  //
-  // Ini BUKAN sisa saldo. Sisa saldo berarti pelanggan menitipkan uang
-  // lebih; ini kebalikannya - pembayarannya masih kurang, dan sisanya
-  // jadi hutang.
+  // Kembalian negatif berarti uang yang diterima belum menutup tagihan.
+  // Struk mencetak nilai positif dengan label berbeda, sama seperti
+  // total di atas.
   bool get kurangBayar => (kembalian ?? 0) < 0;
 
-  // Nilai kembalian tanpa tanda minus, sepasang dengan labelnya.
-  //
-  // Mengikuti cara yang sudah dipakai nilaiTampil/labelTotal: angkanya
-  // selalu positif, dan yang membedakan artinya adalah label di
-  // sebelahnya. Struk bertuliskan "Kembali -Rp10.000" membuat kasir
-  // ragu apakah harus memberi atau menerima; "Kurang Rp10.000" tidak
-  // bisa disalahartikan.
-  int? get nilaiKembalian {
-    final k = kembalian;
-    return k == null ? null : k.abs();
-  }
+  int? get nilaiKembalian => kembalian?.abs();
 
   String get labelKembalian => kurangBayar ? 'Kurang' : 'Kembali';
 

@@ -196,7 +196,7 @@ class _NotaBaruScreenState extends State<NotaBaruScreen> {
   // sedang tidak menggambar, dikerjakan langsung supaya tidak ada kedip.
   void _uangBerubah() {
     if (_statusDipilihSendiri || !mounted) return;
-    final uang = int.tryParse(_uangCtrl.text.trim());
+    final uang = bacaUangDiterima(_uangCtrl.text);
     final cukup = uang != null && _total > 0 && uang >= _total;
     final baru = cukup ? StatusBayar.lunas : StatusBayar.belum;
     if (baru == _statusBayar) return;
@@ -244,7 +244,10 @@ class _NotaBaruScreenState extends State<NotaBaruScreen> {
 
   // Kembalian hanya dihitung kalau kolom uang benar-benar diisi.
   String _uangKembalianInfo(String teks) {
-    final uang = int.tryParse(teks.trim());
+    // Memakai aturan yang SAMA dengan yang nanti disimpan, supaya
+    // keterangan di layar tidak menjanjikan sesuatu yang berbeda dengan
+    // isi struknya. Mengetik 0 di sini berarti belum dicatat.
+    final uang = bacaUangDiterima(teks);
     if (uang == null) {
       return 'Boleh dikosongkan, baris ini tidak akan tercetak';
     }
@@ -272,8 +275,9 @@ class _NotaBaruScreenState extends State<NotaBaruScreen> {
       dibayarMs: _statusBayar == StatusBayar.lunas
           ? (lama?.dibayarMs ?? now.millisecondsSinceEpoch)
           : null,
-      // Uang tidak wajib. Kosong berarti tidak dicatat dan tidak dicetak.
-      uangDibayar: int.tryParse(_uangCtrl.text.trim()),
+      // Uang tidak wajib. Kosong ATAU nol berarti tidak dicatat dan
+      // tidak dicetak - aturannya ada di bacaUangDiterima().
+      uangDibayar: bacaUangDiterima(_uangCtrl.text),
       catatan: _catatanCtrl.text.trim(),
       // Kosong berarti ikut setelan bawaan di Pengaturan.
       jumlahCetak: int.tryParse(_cetakCtrl.text.trim()),

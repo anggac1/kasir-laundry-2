@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 
+import '../print/cetak_gambar.dart';
 import '../print/escpos.dart';
 import '../print/printer_service.dart';
 import '../print/receipt.dart';
@@ -87,6 +88,73 @@ class _PrinterSetupScreenState extends State<PrinterSetupScreen> {
   }
 
   // Lewat pratinjau dulu supaya jelas ini contoh, bukan nota pelanggan.
+  // #Menyusun tes cetak sebagai gambar
+  Future<List<int>?> _bytesGambarTes(List<BarisStruk> baris) async {
+    try {
+      final gambar =
+          await CetakGambar.gambarStruk(baris, s.lebarKertas);
+      if (gambar == null) return null;
+      final data =
+          await CetakGambar.dariGambar(gambar, tebal: s.tebalGambar);
+      gambar.dispose();
+      if (data == null) return null;
+      final p = EscPos()..init(fontKecil: s.fontKecil);
+      return [
+        ...p.selesai(),
+        ...data,
+        ...CetakGambar.selesai(s.barisKosongAkhir),
+      ];
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // #Menyuruh printer mencetak halaman ujinya sendiri
+  Future<void> _cetakMandiri() async {
+    setState(() {
+      _sibuk = true;
+      _kegiatan = 'Meminta halaman uji...';
+    });
+    final HasilCetak hasil;
+    try {
+      hasil =
+          await PrinterService.instance.kirim(EscPos.cetakMandiriBytes());
+    } finally {
+      _lepasSibuk();
+    }
+    if (!mounted) return;
+    pesan(context, hasil.sukses ? 'Halaman uji dicetak printer.' : hasil.pesan,
+        galat: !hasil.sukses);
+  }
+
+  // #Mencetak perbandingan huruf biasa dan tebal
+  // #Mencetak semua kombinasi kualitas dalam satu kertas
+  Future<void> _ujiSemua() async {
+    setState(() {
+      _sibuk = true;
+      _kegiatan = 'Menyiapkan semua contoh...';
+    });
+
+    HasilCetak hasil;
+    try {
+      final bytes = await CetakGambar.ujiSemua(s.lebarKertas);
+      if (bytes == null) {
+        hasil = const HasilCetak(false, 'Gagal menyiapkan contoh.');
+      } else {
+        hasil = await PrinterService.instance.kirim(bytes);
+      }
+    } finally {
+      _lepasSibuk();
+    }
+    if (!mounted) return;
+    pesan(
+        context,
+        hasil.sukses
+            ? 'Terkirim. Bandingkan blok A sampai F di kertas.'
+            : hasil.pesan,
+        galat: !hasil.sukses);
+  }
+
   Future<void> _tesCetak() async {
     final cfg = StrukConfig.dari(s);
     final l = cfg.lebarKertas;
@@ -128,14 +196,26 @@ class _PrinterSetupScreenState extends State<PrinterSetupScreen> {
 
     final HasilCetak hasil;
     try {
-      // Tes cetak sengaja memakai setelan ketajaman yang sedang aktif,
-      // supaya yang diuji benar-benar sama dengan struk sungguhan.
-      final bytes = EscPos.dariBaris(baris,
-          barisKosongAkhir: s.barisKosongAkhir,
-          potongKertas: s.potongKertas,
-          fontKecil: s.fontKecil,
-          ketajaman: s.ketajamanCetak,
-          kelambatan: s.kelambatanCetak);
+      // Tes cetak memakai setelan yang sedang aktif, supaya yang diuji
+      // benar-benar sama dengan struk sungguhan.
+      // Tes cetak mengikuti mode yang sedang aktif, termasuk kalau
+      // "Cetak sebagai gambar" dinyalakan - percuma menguji dengan cara
+      // yang berbeda dari struk sungguhannya.
+      List<int> bytes;
+      if (s.cetakGambar) {
+        bytes = await _bytesGambarTes(baris) ??
+            EscPos.dariBaris(baris,
+                barisKosongAkhir: s.barisKosongAkhir,
+                potongKertas: s.potongKertas,
+                fontKecil: s.fontKecil,
+                tebalSemua: s.tebalkanSemua);
+      } else {
+        bytes = EscPos.dariBaris(baris,
+            barisKosongAkhir: s.barisKosongAkhir,
+            potongKertas: s.potongKertas,
+            fontKecil: s.fontKecil,
+            tebalSemua: s.tebalkanSemua);
+      }
       hasil = await PrinterService.instance.kirim(bytes);
     } finally {
       _lepasSibuk();
@@ -360,6 +440,36 @@ class _PrinterSetupScreenState extends State<PrinterSetupScreen> {
               onPressed: (_sibuk || !_siapTes) ? null : _tesCetak,
               icon: const Icon(Icons.print_outlined),
               label: const Text('Tes Cetak Contoh'),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: OutlinedButton.icon(
+              onPressed: (_sibuk || !_siapTes) ? null : _ujiSemua,
+              icon: const Icon(Icons.contrast),
+              label: const Text('Uji Kualitas Cetak'),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: OutlinedButton.icon(
+              onPressed: (_sibuk || !_siapTes) ? null : _cetakMandiri,
+              icon: const Icon(Icons.fact_check_outlined),
+              label: const Text('Halaman Uji Printer'),
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 6, 16, 0),
+            child: Text(
+              'Uji Kualitas Cetak mencetak SEMUA kombinasi sekaligus '
+              '(A sampai F) dalam satu kertas, jadi tidak perlu '
+              'mengubah setelan berkali-kali. Pilih huruf yang paling '
+              'terbaca, lalu pasang setelannya di Pengaturan.\n'
+              'Halaman Uji Printer dicetak oleh printer itu sendiri, '
+              'berisi keadaan dan alamat Bluetooth-nya.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ),
           if (!_siapTes)

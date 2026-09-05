@@ -5,9 +5,10 @@ import '../ui/umum.dart';
 import 'ekspor_screen.dart';
 import 'hapus_data.dart';
 
-// Nama tingkat ketajaman dan kecepatan, dipakai di chip dan subtitle.
-const _namaKetajaman = ['Normal', 'Tebal', 'Lebih tebal', 'Paling tebal'];
-const _namaKelambatan = ['Cepat', 'Sedang', 'Pelan'];
+// Nama tingkat ketebalan untuk mode cetak gambar.
+const _namaTebalGambar = ['Apa adanya', 'Tebal', 'Lebih tebal', 'Paling tebal'];
+
+
 
 class PengaturanScreen extends StatefulWidget {
   const PengaturanScreen({super.key});
@@ -235,91 +236,118 @@ class _PengaturanScreenState extends State<PengaturanScreen> {
           const Divider(),
           _seksi('Kalau Hasil Cetak Pudar'),
           const Padding(
-            padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 10),
             child: Text(
-              'Dua setelan berikut hanya perlu diubah kalau tulisan di '
-              'kertas terlihat tipis atau abu-abu. Coba yang pertama dulu; '
-              'kalau belum cukup, baru yang kedua.',
+              'Printer 58mm tidak punya setelan kepekatan yang bisa '
+              'diatur aplikasi. Dua cara di bawah ini mengakalinya dari '
+              'sisi aplikasi. Coba yang pertama dulu - kalau masih pudar, '
+              'baru nyalakan yang kedua.',
               style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ),
-          // Tulisan biasa, BUKAN ListTile.
-          //
-          // Sebelumnya ini ListTile lengkap dengan ikon, jadi terlihat
-          // seperti tombol padahal tidak bisa ditekan sama sekali -
-          // yang diatur adalah chip di bawahnya.
-          _labelSetelan('1. Ketebalan tulisan',
-              'Sekarang: ${_namaKetajaman[s.ketajamanCetak]}'),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Makin tebal, makin hitam hasilnya. Printer memanaskan '
-                  'tiap titik dua kali dalam satu lintasan, jadi tulisannya '
-                  'tidak mungkin bergeser.\n'
-                  'Efek samping: mencetak sedikit lebih lama dan baterai '
-                  'printer lebih cepat habis.',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 6,
-                  children: [
-                    for (var i = 0; i < _namaKetajaman.length; i++)
-                      ChoiceChip(
-                        label: Text(_namaKetajaman[i]),
-                        selected: s.ketajamanCetak == i,
-                        onSelected: (_) async {
-                          await s.setKetajamanCetak(i);
-                          if (mounted) setState(() {});
-                        },
-                      ),
-                  ],
-                ),
-              ],
+          SwitchListTile(
+            secondary: const Icon(Icons.format_bold),
+            value: s.tebalkanSemua,
+            title: const Text('Tebalkan semua baris'),
+            subtitle: const Text(
+                'Seluruh struk dicetak dengan huruf tebal, bukan hanya '
+                'baris bertag [B]. Membantu pada kertas yang tipis.'),
+            isThreeLine: true,
+            onChanged: (v) async {
+              await s.setTebalkanSemua(v);
+              if (mounted) setState(() {});
+            },
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(
+              'Cara paling ringan. Bandingkan dulu lewat "Uji Ketebalan" '
+              'di layar Printer.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ),
-          _labelSetelan('2. Kecepatan cetak',
-              'Sekarang: ${_namaKelambatan[s.kelambatanCetak]}'),
+          const Divider(height: 24),
+          SwitchListTile(
+            secondary: const Icon(Icons.image_outlined),
+            value: s.cetakGambar,
+            title: const Text('Cetak sebagai gambar'),
+            subtitle: const Text(
+                'Struk digambar dulu di HP, baru dikirim sebagai gambar. '
+                'Ketebalan hurufnya jadi bisa diatur sendiri.'),
+            isThreeLine: true,
+            onChanged: (v) async {
+              await s.setCetakGambar(v);
+              if (mounted) setState(() {});
+            },
+          ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Mencetak lebih pelan memberi kertas waktu lebih lama '
-                  'untuk menghitam. Pakai ini kalau Ketebalan sudah Paling '
-                  'tebal tapi hasilnya masih pudar.\n'
-                  'Efek samping: struk lebih lama keluar.',
+                  'Dalam mode gambar, aplikasi yang menentukan tiap titik '
+                  'yang ditembakkan printer - jadi huruf bisa ditebalkan '
+                  'sampai terbaca di kertas yang buruk.\n'
+                  'Efek samping: mencetak lebih lambat, dan struk tidak '
+                  'bisa disalin sebagai teks oleh printer.',
                   style: TextStyle(fontSize: 12, color: Colors.grey),
                 ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 6,
-                  children: [
-                    for (var i = 0; i < _namaKelambatan.length; i++)
-                      ChoiceChip(
-                        label: Text(_namaKelambatan[i]),
-                        selected: s.kelambatanCetak == i,
-                        onSelected: (_) async {
-                          await s.setKelambatanCetak(i);
-                          if (mounted) setState(() {});
-                        },
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Tidak semua printer mengenal dua setelan ini. Kalau '
-                  'setelah diubah struknya berisi huruf acak, kembalikan '
-                  'Ketebalan ke Normal dan Kecepatan ke Cepat.\n'
-                  'Coba dulu lewat Tes Cetak di layar Printer, biar tidak '
-                  'membuang nota pelanggan.',
-                  style: TextStyle(
-                      fontSize: 12, color: Colors.orange.shade900),
-                ),
+                if (s.cetakGambar) ...[
+                  const SizedBox(height: 10),
+                  const Text('Ketebalan huruf',
+                      style: TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    children: [
+                      for (var i = 0; i < _namaTebalGambar.length; i++)
+                        ChoiceChip(
+                          label: Text(_namaTebalGambar[i]),
+                          selected: s.tebalGambar == i,
+                          onSelected: (_) async {
+                            await s.setTebalGambar(i);
+                            if (mounted) setState(() {});
+                          },
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Makin tebal makin hitam, tapi kalau kelewatan huruf '
+                    'bisa saling menempel.',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text('Tembakan per titik',
+                      style: TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    children: [
+                      for (var i = 1; i <= 2; i++)
+                        ChoiceChip(
+                          label: Text(i == 1 ? 'Sekali' : 'Dua kali'),
+                          selected: s.ulangGambar == i,
+                          onSelected: (_) async {
+                            await s.setUlangGambar(i);
+                            if (mounted) setState(() {});
+                          },
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Dua kali menembak titik yang sama sebelum kertas '
+                    'bergerak, jadi panasnya berlipat dan hasilnya paling '
+                    'hitam. Ongkosnya: mencetak jadi dua kali lebih lama.\n'
+                    'Tekan "Uji Kualitas Cetak" di layar Printer untuk '
+                    'melihat semua kombinasi sekaligus.',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
               ],
             ),
           ),

@@ -472,26 +472,22 @@ const _masalah = <_Butir>[
   _Butir(
     'Hasil cetak tipis atau pudar',
     ikon: Icons.opacity,
-    isi: 'Biasanya bukan printernya, melainkan kertas thermal murah yang '
-        'lapisannya tipis. Ada dua setelan untuk menyiasatinya.',
+    isi: 'Hampir selalu kertasnya, bukan aplikasinya. Kertas thermal murah '
+        'lapisannya tipis, dan yang sudah lama disimpan bisa kehilangan '
+        'kepekaannya.',
     langkah: [
-      'Pengaturan, cari bagian "Kalau Hasil Cetak Pudar"',
-      'Ketebalan tulisan: naikkan satu tingkat, lalu Tes Cetak',
-      'Masih pudar? Naikkan lagi sampai Paling tebal',
-      'Belum cukup juga? Baru turunkan Kecepatan cetak ke Sedang',
+      'Coba gulungan kertas baru dari merek lain',
+      'Bersihkan kepala printer dengan kapas beralkohol, tunggu kering',
+      'Pastikan kertas terpasang lurus dan penutupnya terkunci rapat',
+      'Isi ulang baterai printer - daya lemah membuat cetakan pudar',
     ],
-    catatan: 'Urutannya penting: Ketebalan dulu, Kecepatan belakangan. '
-        'Ketebalan yang menentukan hasil; Kecepatan hanya membantu kalau '
-        'Ketebalan sudah mentok.\n\n'
-        'Ketebalan di atas Normal membuat printer memanaskan tiap titik '
-        'DUA KALI dalam satu lintasan. Kertas tidak bergerak di antaranya, '
-        'jadi mustahil meleset seperti kalau struknya dicetak ulang.\n\n'
-        'Efek sampingnya: mencetak lebih lama, baterai printer lebih cepat '
-        'habis, kepala printer lebih panas. Pakai seperlunya.\n\n'
-        'Tidak semua printer mengenal setelan ini. Kalau strukmya jadi '
-        'berisi huruf acak, kembalikan Ketebalan ke Normal dan Kecepatan '
-        'ke Cepat. Coba lewat Tes Cetak dulu, jangan langsung ke nota '
-        'pelanggan.',
+    catatan: 'Kalau ada baris yang harus benar-benar terbaca, tebalkan '
+        'lewat template struk dengan tag [B]. Huruf tebal dicetak dengan '
+        'titik lebih rapat, dan itu satu-satunya cara menghitamkan yang '
+        'dikenal hampir semua printer.\n\n'
+        'Kertas thermal juga memudar sendiri kena panas dan sinar '
+        'matahari. Untuk arsip yang harus awet, simpan berkas PDF-nya '
+        'lewat Ekspor laporan, jangan mengandalkan struk kertas.',
   ),
   _Butir(
     'Struk tercetak separuh lalu berhenti',

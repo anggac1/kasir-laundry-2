@@ -235,21 +235,7 @@ class Settings {
   Future<void> setPolaNamaBerkas(String v) =>
       _p.setString('share_filename', v.trim().isEmpty ? 'Nota' : v.trim());
 
-  // Ketajaman cetak, 0 sampai 3. 0 berarti bawaan printer, tanpa
-  // perintah tambahan sama sekali.
-  //
-  // Di atas 0, tiap titik dipanaskan dua kali (ESC G) dan lama
-  // pemanasannya dinaikkan. Ini penawar kertas thermal murah yang
-  // hasilnya pudar.
-  int get ketajamanCetak => (_p.getInt('print_darkness') ?? 0).clamp(0, 3);
-  Future<void> setKetajamanCetak(int v) =>
-      _p.setInt('print_darkness', v.clamp(0, 3));
 
-  // Kelambatan cetak, 0 sampai 2. Memperbesar jeda antar baris titik.
-  // Mencetak lebih lama, tapi kertas punya waktu lebih untuk menghitam.
-  int get kelambatanCetak => (_p.getInt('print_slowness') ?? 0).clamp(0, 2);
-  Future<void> setKelambatanCetak(int v) =>
-      _p.setInt('print_slowness', v.clamp(0, 2));
 
   // Banyak printer 58mm murah, termasuk RPP02N, tidak punya pisau potong.
   bool get potongKertas => _p.getBool('auto_cut') ?? false;
@@ -305,13 +291,53 @@ class Settings {
   Future<void> setPesanPengantar(String v) =>
       _p.setString('share_message', v.trim());
 
+  // Mencetak struk sebagai GAMBAR, bukan teks.
+  //
+  // Akal-akalan untuk kertas jelek. Dalam mode gambar, aplikasi yang
+  // menentukan tiap titik, jadi hurufnya bisa ditebalkan sendiri -
+  // sesuatu yang mustahil lewat perintah teks karena printer ini tidak
+  // punya setelan kepekatan sama sekali.
+  //
+  // Tidak dinyalakan secara bawaan: mencetak gambar lebih lambat dan
+  // memakan lebih banyak data, jadi hanya berguna kalau kertasnya
+  // memang bermasalah.
+  bool get cetakGambar => _p.getBool('print_raster') ?? false;
+  Future<void> setCetakGambar(bool v) => _p.setBool('print_raster', v);
+
+  // Ketebalan huruf pada mode gambar: 0 apa adanya, 1-3 makin tebal.
+  int get tebalGambar => (_p.getInt('print_raster_bold') ?? 1).clamp(0, 3);
+  Future<void> setTebalGambar(int v) =>
+      _p.setInt('print_raster_bold', v.clamp(0, 3));
+
+  // Berapa kali tiap potongan gambar ditembakkan sebelum kertas maju.
+  //
+  // 1 = sekali (biasa), 2 = dua kali di titik yang sama. Hanya berlaku
+  // pada mode cetak gambar. Menggandakan panas per titik, jadi cara
+  // paling ampuh menghitamkan kertas yang buruk - dengan ongkos waktu
+  // cetak yang ikut berlipat.
+  int get ulangGambar => (_p.getInt('print_raster_pass') ?? 1).clamp(1, 3);
+  Future<void> setUlangGambar(int v) =>
+      _p.setInt('print_raster_pass', v.clamp(1, 3));
+
+  // Menebalkan SELURUH baris struk, bukan hanya yang bertag [B].
+  //
+  // Dulu ini pilihan 0-3 yang mengirim perintah kepekatan. Perintah itu
+  // tidak ada di printer 58mm kelas ini - sudah dipastikan dari daftar
+  // perintah resmi maupun SDK pabrikannya. Yang benar-benar
+  // menghitamkan cuma huruf tebal, dan itu cuma hidup atau mati.
+  bool get tebalkanSemua => _p.getBool('print_bold_all') ?? false;
+  Future<void> setTebalkanSemua(bool v) =>
+      _p.setBool('print_bold_all', v);
+
   Future<void> resetPrinter() async {
     await _p.remove('paper_chars');
     await _p.remove('small_font');
     await _p.remove('auto_cut');
     await _p.remove('feed_lines');
-    await _p.remove('print_darkness');
-    await _p.remove('print_slowness');
+    await _p.remove('print_bold_all');
+    await _p.remove('print_raster');
+    await _p.remove('print_raster_bold');
+    await _p.remove('print_raster_pass');
   }
 
   // #Mengembalikan SEMUA setelan ke bawaan
@@ -327,7 +353,7 @@ class Settings {
       'shop_name', 'shop_address', 'shop_phone',
       // Kertas dan huruf
       'paper_chars', 'small_font', 'auto_cut', 'feed_lines',
-      'print_darkness', 'print_slowness',
+      'print_bold_all', 'print_raster', 'print_raster_bold', 'print_raster_pass',
       // Template yang sedang dipakai
       'tpl_main', 'tpl_item',
       // Berbagi

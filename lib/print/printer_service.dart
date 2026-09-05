@@ -6,6 +6,7 @@ import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 
 import '../models/models.dart';
 import '../store/settings.dart';
+import 'cetak_gambar.dart';
 import 'escpos.dart';
 import 'receipt.dart';
 
@@ -334,7 +335,7 @@ class PrinterService {
     return semua;
   }
 
-  List<int> susunBytes(Nota nota, {int? paksaSalinan}) {
+  Future<List<int>> susunBytes(Nota nota, {int? paksaSalinan}) async {
     final s = Settings.instance;
     final cfg = StrukConfig.dari(s);
     final jumlah = jumlahSalinan(nota, paksaSalinan);
@@ -343,18 +344,51 @@ class PrinterService {
     for (var i = 0; i < jumlah; i++) {
       final baris = Struk.render(nota, cfg,
           salinan: s.labelSalinanKe(i), salinanKe: i + 1);
+
+      if (s.cetakGambar) {
+        final potong = await _bytesGambar(baris, s);
+        if (potong != null) {
+          semua.addAll(potong);
+          continue;
+        }
+        // Kalau menggambar gagal, jatuh kembali ke mode teks daripada
+        // tidak mencetak apa pun.
+      }
+
       semua.addAll(EscPos.dariBaris(
         baris,
         barisKosongAkhir: s.barisKosongAkhir,
         potongKertas: s.potongKertas,
         fontKecil: s.fontKecil,
-        ketajaman: s.ketajamanCetak,
-        kelambatan: s.kelambatanCetak,
+        tebalSemua: s.tebalkanSemua,
       ));
     }
     return semua;
   }
 
-  Future<HasilCetak> cetakNota(Nota nota, {int? paksaSalinan}) =>
-      kirim(susunBytes(nota, paksaSalinan: paksaSalinan));
+  // #Menyusun satu struk sebagai gambar raster
+  Future<List<int>?> _bytesGambar(List<BarisStruk> baris, Settings s) async {
+    try {
+      final gambar = await CetakGambar.gambarStruk(baris, s.lebarKertas);
+      if (gambar == null) return null;
+      final data =
+          await CetakGambar.dariGambar(gambar,
+              tebal: s.tebalGambar, ulang: s.ulangGambar);
+      gambar.dispose();
+      if (data == null) return null;
+
+      final p = EscPos()..init(fontKecil: s.fontKecil);
+      return [
+        ...p.selesai(),
+        ...data,
+        ...CetakGambar.selesai(s.barisKosongAkhir),
+        if (s.potongKertas) ...[0x1D, 0x56, 0x00],
+      ];
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<HasilCetak> cetakNota(Nota nota, {int? paksaSalinan}) async =>
+      kirim(await susunBytes(nota, paksaSalinan: paksaSalinan));
 }

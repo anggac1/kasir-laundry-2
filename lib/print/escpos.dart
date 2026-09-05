@@ -25,33 +25,33 @@ class EscPos {
 
   void tebal(bool on) => _b.addAll([_esc, 0x45, on ? 1 : 0]);
 
-  // Cetak ganda: tiap titik dipanaskan DUA KALI dalam satu lintasan,
-  // tanpa kertas bergerak di antaranya.
+  // DC2 T - cetak halaman uji bawaan printer.
   //
-  // Ini jawaban yang benar untuk "cetak dua kali": mengulang seluruh
-  // struk secara fisik berisiko meleset karena kertas sudah terlanjur
-  // ditarik, sedangkan ESC G dikerjakan printer per baris titik, jadi
-  // mustahil bergeser. Hasilnya lebih hitam pada kertas yang jelek.
-  void cetakGanda(bool on) => _b.addAll([_esc, 0x47, on ? 1 : 0]);
+  // Dibaca langsung dari SDK resmi Rongta (EscCmd.getSelfTestCmd),
+  // yang mengembalikan {0x12, 0x54}. Halaman ini dicetak oleh
+  // FIRMWARE printer, bukan oleh aplikasi, jadi isinya menunjukkan
+  // keadaan printer yang sebenarnya - termasuk alamat Bluetooth.
+  void cetakMandiri() => _b.addAll([0x12, 0x54]);
 
-  // Atur lama pemanasan dan jeda antar baris titik.
+  // CATATAN: TIDAK ADA perintah kepekatan untuk mode struk.
   //
-  //   titikMaks : banyak titik yang dipanaskan sekaligus, satuan 8 titik
-  //   lamaPanas : lama pemanasan, satuan 10 mikrodetik
-  //   jeda      : jeda antar baris titik, satuan 10 mikrodetik
+  // Ini sudah diperiksa sampai ke sumbernya, bukan dikira-kira:
   //
-  // Makin lama pemanasannya makin hitam hasilnya, tapi makin panas pula
-  // kepala printernya. Makin besar jedanya makin lambat mencetak, dan
-  // itu justru membantu: kertas murah butuh waktu lebih untuk menghitam.
-  void panas(int titikMaks, int lamaPanas, int jeda) {
-    _b.addAll([
-      _esc,
-      0x37,
-      titikMaks.clamp(0, 255),
-      lamaPanas.clamp(3, 255),
-      jeda.clamp(0, 255),
-    ]);
-  }
+  //   - Daftar perintah resmi RPP02N tidak memuat ESC 7, DC2 #,
+  //     GS ( E, maupun GS |.
+  //   - SDK Android resmi Rongta dibongkar isinya. Satu-satunya
+  //     metode kepekatan yang ada adalah setTscCurrentDensity dan
+  //     setZplCurrentDensity - dua-duanya untuk mode LABEL (TSC/ZPL),
+  //     bukan mode struk. Di kelas perintah struk tidak ada satu pun
+  //     metode kepekatan.
+  //
+  // ESC 7 dan DC2 # berasal dari papan CSN-A2/Adafruit, keluarga
+  // firmware yang berbeda. Mengirimnya ke printer ini paling banter
+  // diabaikan, paling buruk menyisakan huruf sampah di kertas -
+  // persis simbol yang muncul di awal nota sebelumnya.
+  //
+  // Yang benar-benar menghitamkan di sini cuma ESC E (huruf tebal),
+  // karena titiknya digambar lebih rapat oleh firmware.
 
   // Lebar dan tinggi diatur TERPISAH, 1 sampai 8 masing-masing.
   //
@@ -90,20 +90,16 @@ class EscPos {
 
   List<int> selesai() => List<int>.unmodifiable(_b);
 
-  // #Lama pemanasan menurut tingkat ketajaman. 80 adalah bawaan pabrik.
-  static int _lamaPanas(int tingkat) => switch (tingkat) {
-        1 => 100,
-        2 => 140,
-        3 => 190,
-        _ => 80,
-      };
-
-  // #Jeda antar baris titik menurut tingkat kelambatan. 2 adalah bawaan.
-  static int _jeda(int tingkat) => switch (tingkat) {
-        1 => 20,
-        2 => 40,
-        _ => 2,
-      };
+  // #Halaman uji bawaan printer
+  //
+  // Dicetak oleh firmware printer sendiri, bukan disusun aplikasi.
+  // Isinya keadaan printer yang sebenarnya, termasuk alamat Bluetooth
+  // yang berguna kalau sambungannya bermasalah.
+  static List<int> cetakMandiriBytes() {
+    final p = EscPos()..init();
+    p.cetakMandiri();
+    return p.selesai();
+  }
 
   // Printer thermal tidak paham UTF-8. Huruf beraksen diturunkan ke ASCII,
   // sisanya jadi '?'. Dipakai juga oleh receipt.dart untuk mengukur lebar
@@ -142,18 +138,20 @@ class EscPos {
     int barisKosongAkhir = 4,
     bool potongKertas = false,
     bool fontKecil = false,
-    int ketajaman = 0,
-    int kelambatan = 0,
+    bool tebalSemua = false,
   }) {
     final p = EscPos()..init(fontKecil: fontKecil);
 
-    // Perintah ketajaman hanya dikirim bila memang diminta. Printer yang
-    // tidak mengenalinya bisa mencetak sampah, jadi pada setelan Normal
-    // tidak ada satu byte tambahan pun yang dikirim.
-    if (ketajaman > 0 || kelambatan > 0) {
-      p.panas(7, _lamaPanas(ketajaman), _jeda(kelambatan));
-    }
-    if (ketajaman >= 1) p.cetakGanda(true);
+    // Ketajaman dikerjakan dengan HURUF TEBAL, bukan perintah kepekatan.
+    //
+    // Printer ini tidak punya perintah kepekatan untuk mode struk -
+    // sudah dipastikan dari daftar perintah resmi RPP02N dan dari SDK
+    // Android Rongta sendiri. Yang tersedia cuma ESC E, dan itu memang
+    // menghitamkan: firmware menggambar tiap huruf dengan titik lebih
+    // rapat.
+    //
+    // Karena itu "Tebalkan semua baris" menyalakan tebal untuk SELURUH
+    // struk, bukan cuma baris yang diberi tag [B] di template.
 
     // Ukuran dan tebal ditegaskan ulang tiap baris, bukan hanya saat
     // berubah: pada sebagian printer ESC ! 0x00 ikut mematikan tebal,
@@ -161,14 +159,13 @@ class EscPos {
     for (final b in baris) {
       p.rata(b.rata);
       p.besar(b.skalaLebar, b.skalaTinggi);
-      p.tebal(b.tebal);
+      p.tebal(b.tebal || tebalSemua);
       p.teks(b.teks);
     }
 
     p.besar(1, 1);
     p.tebal(false);
     p.rata(rataKiri);
-    if (ketajaman >= 1) p.cetakGanda(false);
 
     if (potongKertas) {
       p.potong();

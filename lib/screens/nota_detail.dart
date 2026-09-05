@@ -56,11 +56,13 @@ class _NotaDetailScreenState extends State<NotaDetailScreen> {
       context,
       judul: 'Uang Diterima',
       awal: n.uangDibayar?.toString() ?? '',
-      bantuan: 'Kosongkan bila tidak ingin dicatat. Total ${rupiah(n.total)}',
+      bantuan: 'Kosongkan atau isi 0 bila tidak ingin dicatat. '
+          'Total ${rupiah(n.total)}',
       tipe: TextInputType.number,
     );
     if (teks == null) return;
-    await DB.instance.notaUbahUang(widget.notaId, int.tryParse(teks.trim()));
+    await DB.instance
+        .notaUbahUang(widget.notaId, bacaUangDiterima(teks));
     await _muat();
   }
 
