@@ -57,6 +57,48 @@ class _BerandaScreenState extends State<BerandaScreen> {
   // Kegagalan apa pun harus tetap menghentikan spinner dan menampilkan
   // sebabnya. Tanpa penanganan ini, satu galat database membuat layar
   // berputar selamanya tanpa petunjuk apa yang salah.
+  // #Menandai lunas / belum bayar langsung dari daftar
+  //
+  // Dua arah: LUNAS -> BELUM BAYAR juga bisa, karena kesalahan tekan
+  // pasti terjadi kalau tombolnya dipakai cepat-cepat berurutan.
+  //
+  // Tidak ada dialog konfirmasi. Aksinya ringan dan bisa dibatalkan dari
+  // snackbar; memaksa konfirmasi tiap nota justru mengembalikan lambatnya
+  // yang mau dihilangkan. Nota dengan sisa saldo tidak sampai ke sini,
+  // karena lencananya diganti tulisan "sisa saldo".
+  Future<void> _ubahBayarCepat(Nota n) async {
+    final id = n.id;
+    if (id == null) return;
+
+    final sebelum = n.statusBayar;
+    final sesudah =
+        sebelum == StatusBayar.lunas ? StatusBayar.belum : StatusBayar.lunas;
+
+    await DB.instance.notaUbahBayar(id, sesudah);
+    if (!mounted) return;
+    await _muat(paksaRingkasan: true);
+    if (!mounted) return;
+
+    final jadiLunas = sesudah == StatusBayar.lunas;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(jadiLunas
+              ? '${n.pelanggan} ditandai LUNAS.'
+              : '${n.pelanggan} dikembalikan jadi BELUM BAYAR.'),
+          duration: const Duration(seconds: 4),
+          action: SnackBarAction(
+            label: 'Batal',
+            onPressed: () async {
+              await DB.instance.notaUbahBayar(id, sebelum);
+              if (mounted) await _muat(paksaRingkasan: true);
+            },
+          ),
+        ),
+      );
+  }
+
   Future<void> _muat({bool paksaRingkasan = false}) async {
     if (!mounted) return;
     setState(() {
@@ -435,26 +477,78 @@ class _BerandaScreenState extends State<BerandaScreen> {
               ),
             ),
             const SizedBox(width: 10),
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  rupiah(n.nilaiTampil),
-                  style: teks.bodyLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: n.adaSisaSaldo ? hijau : null,
+            // Angka DAN lencana sama-sama jadi tombol tandai bayar.
+            //
+            // Lencana saja terlalu kecil untuk ibu jari, apalagi kalau
+            // dipakai berturut-turut sambil menagih. Karena keduanya
+            // memang bicara soal pembayaran, seluruh sudut kanan ini
+            // dijadikan satu daerah ketuk - tanpa menambah tinggi baris
+            // sedikit pun. Sisi kiri baris tetap membuka nota, jadi dua
+            // niat yang berbeda punya daerahnya masing-masing.
+            //
+            // Nota bersisa saldo tidak ikut: uangnya sudah diterima
+            // lebih, jadi status bayarnya tidak boleh diputar begitu
+            // saja dari sini.
+            if (n.adaSisaSaldo)
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    rupiah(n.nilaiTampil),
+                    style: teks.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: hijau,
+                    ),
+                    maxLines: 1,
                   ),
-                  maxLines: 1,
-                ),
-                const SizedBox(height: 2),
-                if (n.adaSisaSaldo)
+                  const SizedBox(height: 2),
                   Text('sisa saldo',
-                      style: teks.labelSmall?.copyWith(color: hijau))
-                else
-                  LencanaBayar(statusBayar: n.statusBayar),
-              ],
-            ),
+                      style: teks.labelSmall?.copyWith(color: hijau)),
+                ],
+              )
+            else
+              Builder(builder: (context) {
+                final lunas = n.statusBayar == StatusBayar.lunas;
+                final warna = lunas ? hijau : Colors.red.shade700;
+                return Material(
+                  color: warna.withAlpha(14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    side: BorderSide(color: warna.withAlpha(56)),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: id == null ? null : () => _ubahBayarCepat(n),
+                    child: Padding(
+                      // Melebar ke SAMPING saja, tidak ke atas-bawah.
+                      //
+                      // Menambah 4dp atas dan bawah membuat kolom kanan
+                      // jadi 49dp - lebih tinggi daripada kolom kiri yang
+                      // 38dp - sehingga barisnya ikut tumbuh 8dp dan
+                      // jumlah nota yang muat per layar berkurang satu.
+                      // Ke samping tidak berbiaya: ruang itu memang
+                      // kosong.
+                      padding: const EdgeInsets.fromLTRB(10, 2, 8, 2),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            rupiah(n.nilaiTampil),
+                            style: teks.bodyLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                            maxLines: 1,
+                          ),
+                          const SizedBox(height: 1),
+                          _LencanaTombol(statusBayar: n.statusBayar),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }),
           ],
         ),
       ),
@@ -488,3 +582,69 @@ Widget _pil(String teks, Color warna) => Container(
           style: TextStyle(
               fontSize: 10, color: warna, fontWeight: FontWeight.w700)),
     );
+
+// Lencana status yang sekaligus bisa ditekan untuk mengubah statusnya.
+//
+// Ukurannya sama persis dengan LencanaBayar biasa; yang ditambahkan cuma
+// daerah ketuk dan tanda kecil supaya ketahuan bisa ditekan.
+class _LencanaTombol extends StatelessWidget {
+  final int statusBayar;
+
+  const _LencanaTombol({required this.statusBayar});
+
+  // Hanya penanda, BUKAN daerah ketuk sendiri.
+  //
+  // Yang menangkap ketukan InkWell di sekelilingnya, yang juga meliputi
+  // angka rupiahnya. Kalau di sini dipasang InkWell lagi, daerah ketuk
+  // yang besar itu justru berlubang di tengah: ketukan tepat di lencana
+  // ditelan yang dalam, dan riak sentuhnya jadi dua macam untuk satu
+  // perbuatan yang sama.
+  @override
+  Widget build(BuildContext context) {
+    if (statusBayar == StatusBayar.sembunyi) {
+      return const SizedBox.shrink();
+    }
+    final lunas = statusBayar == StatusBayar.lunas;
+    // Latar lencana dan TULISANNYA sengaja beda pekat.
+    //
+    // Tulisan 10px dengan warna shade700 di atas latar shade700 alpha 38
+    // cuma berkontras 4.44:1 (merah) dan 3.44:1 (hijau) - dua-duanya di
+    // bawah 4.5:1 yang dianggap batas nyaman dibaca. shade900 menaikkan-
+    // nya jadi 5.19:1 dan 6.57:1 tanpa mengubah warna latarnya.
+    final warna = lunas ? Colors.green.shade700 : Colors.red.shade700;
+    final warnaTeks = lunas ? Colors.green.shade900 : Colors.red.shade900;
+
+    // Ikon hanya dipasang pada LUNAS.
+    //
+    // Sebelumnya BELUM BAYAR pun memakai tanda centang, dan itu
+    // membingungkan: centang berarti "sudah beres", padahal tulisan di
+    // sebelahnya justru mengatakan belum dibayar. Yang belum lunas
+    // cukup tulisannya saja - keadaan yang belum terjadi tidak perlu
+    // lambang.
+    //
+    // Bingkai juga dilepas: kotak yang membungkusnya sudah bergaris,
+    // dan dua garis bersarang membuat sudut kanan terlihat ramai.
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: warna.withAlpha(38),
+        borderRadius: BorderRadius.circular(5),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (lunas) ...[
+            Icon(Icons.check_circle, size: 11, color: warnaTeks),
+            const SizedBox(width: 3),
+          ],
+          Text(lunas ? 'LUNAS' : 'BELUM BAYAR',
+              style: TextStyle(
+                  fontSize: 10,
+                  color: warnaTeks,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.2)),
+        ],
+      ),
+    );
+  }
+}

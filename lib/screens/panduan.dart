@@ -348,23 +348,6 @@ const _mulai = <_Butir>[
         'seperti paket, lembar, atau meter, bahkan mengosongkannya.',
   ),
   _Butir(
-    'Ganti logo dan nama aplikasi',
-    ikon: Icons.image_outlined,
-    isi: 'Nama yang tampil di pojok kiri atas diambil dari NAMA BERKAS logo, '
-        'jadi keduanya diganti sekaligus lewat satu berkas.',
-    langkah: [
-      'Buka folder proyek, masuk ke assets/merek/',
-      'Taruh satu berkas gambar di situ, misalnya "Kasir Melati.png"',
-      'Build ulang APK-nya lewat push_ke_github.bat',
-    ],
-    catatan: 'Ekstensi tidak ikut terbaca: berkas "Kasir Melati.png" membuat '
-        'aplikasi bernama Kasir Melati, bukan "Kasir Melati.png".\n\n'
-        'Format png, jpg, jpeg, webp, gif, dan bmp semuanya bisa. Ukuran '
-        'yang enak dilihat 512x512 piksel.\n\n'
-        'Folder itu boleh dibiarkan kosong. Aplikasi akan memakai bawaannya, '
-        'yaitu logo Flutter dan nama Kasir Laundry.',
-  ),
-  _Butir(
     'Sambungkan printer',
     ikon: Icons.print_outlined,
     isi: 'Printer harus dipasangkan lewat Setelan Bluetooth HP lebih dulu. '
@@ -555,6 +538,47 @@ const _masalah = <_Butir>[
         'kemudian dan menimpa yang tersimpan. Kalau printer baru saja '
         'dipasangkan di Setelan Bluetooth HP dan belum muncul, tekan ikon '
         'segarkan di kanan atas.',
+  ),
+  _Butir(
+    'Menagih banyak pelanggan sekaligus',
+    ikon: Icons.playlist_add_check,
+    isi: 'Status bayar bisa diubah langsung dari beranda, tanpa membuka '
+        'notanya satu per satu. Berguna saat banyak pelanggan melunasi '
+        'berbarengan.',
+    langkah: [
+      'Di beranda, ketuk kartu hutang di atas untuk menyaring yang belum '
+          'bayar saja',
+      'Ketuk harga atau lencana BELUM BAYAR di sisi kanan baris',
+      'Notanya langsung jadi LUNAS dan hilang dari saringan',
+      'Ulangi untuk pelanggan berikutnya',
+    ],
+    catatan: 'Seluruh sisi kanan baris - angka harga dan lencananya - '
+        'adalah satu tombol, jadi tidak perlu membidik lencananya yang '
+        'kecil. Menekan sisi kiri baris tetap membuka notanya seperti '
+        'biasa.\n\n'
+        'Bisa dua arah: mengetuk yang sudah LUNAS mengembalikannya jadi '
+        'BELUM BAYAR, untuk berjaga kalau salah tekan.\n\n'
+        'Setiap perubahan memunculkan tombol Batal selama beberapa detik '
+        'di bawah layar.\n\n'
+        'Cara lama lewat halaman detail nota tetap ada, lengkap dengan '
+        'kolom uang diterima dan kembalian.',
+  ),
+  _Butir(
+    'Ubah kata pengantar saat mengirim nota',
+    ikon: Icons.chat_bubble_outline,
+    isi: 'Kalimat yang menemani gambar atau PDF di chat pelanggan bisa '
+        'diganti sendiri, misalnya disesuaikan dengan gaya bicara laundry '
+        'Anda.',
+    langkah: [
+      'Menu titik tiga, pilih Template Struk',
+      'Buka tab Pengaturan',
+      'Ketuk Kata pengantar, lalu tulis kalimatnya',
+    ],
+    catatan: 'Boleh menyisipkan {nama}, {toko}, {tanggal}, {no_nota}, dan '
+        '{total}, yang terisi otomatis sesuai notanya.\n\n'
+        'Contoh: "Halo {nama}, terima kasih sudah laundry di {toko}."\n\n'
+        'Ini hanya kalimat sapaan. Isi struknya sendiri sudah ada di dalam '
+        'gambar atau PDF yang dilampirkan.',
   ),
   _Butir(
     'Beranda terasa lambat dibuka',
@@ -762,8 +786,9 @@ const _lanjutan = <_Butir>[
       'Simpan berkas PDF dan Excel-nya ke tempat lain, bukan di HP itu saja',
       'Baru copot atau pasang versi barunya',
     ],
-    catatan: 'Memasang APK baru DI ATAS yang lama aman, datanya ikut. Yang '
-        'menghapus data adalah mencopot lebih dulu lalu memasang ulang.',
+    catatan: 'Memperbarui aplikasi DI ATAS yang lama aman, datanya ikut. '
+        'Yang menghapus data adalah mencopot lebih dulu lalu memasang '
+        'ulang.',
   ),
   _Butir(
     'Bagikan nota ke pelanggan',
@@ -773,16 +798,18 @@ const _lanjutan = <_Butir>[
     langkah: [
       'Buka notanya dari beranda',
       'Tekan Bagikan ke Pelanggan',
-      'Periksa hasilnya di tiga tab: Teks, Gambar, PDF',
-      'Tekan Bagikan Sekarang, centang formatnya',
+      'Buka tab Teks, Gambar, atau PDF untuk melihat hasilnya',
+      'Tekan tombol Bagikan di bawah - yang terkirim bentuk yang '
+          'sedang Anda lihat',
       'Pilih aplikasi tujuannya di menu berbagi bawaan HP',
     ],
     catatan: 'Teks   - langsung terbaca di chat, tapi ukuran huruf tidak '
         'ikut karena WhatsApp tidak mengenalnya\n'
         'PDF    - rapi, bisa dicetak ulang pelanggan\n'
         'Gambar - paling mirip struk asli, ukuran huruf ikut terlihat\n\n'
-        'Layar pratinjau menampilkan ketiganya apa adanya sebelum dikirim, '
-        'jadi tidak perlu menebak hasilnya.\n\n'
+        'Yang dikirim satu bentuk saja, yaitu tab yang sedang dibuka. '
+        'Layar pratinjau menampilkannya apa adanya sebelum dikirim, jadi '
+        'tidak perlu menebak hasilnya.\n\n'
         'Tidak ada nomor WhatsApp yang perlu diisi: berkasnya diserahkan '
         'ke menu berbagi bawaan HP.',
   ),
