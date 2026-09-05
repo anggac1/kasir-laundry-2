@@ -229,7 +229,10 @@ class Ekspor {
         'Jumlah Item',
         'Status Bayar',
         'Uang Diterima',
-        'Kembalian',
+        // Bertanda: positif berarti kembalian, negatif berarti
+        // pembayarannya kurang. Sengaja dibiarkan bertanda supaya bisa
+        // dijumlahkan langsung di Excel.
+        'Kembalian (- = kurang bayar)',
         'Total',
         'Catatan',
       ]);

@@ -17,7 +17,7 @@ Nama     : {nama_pelanggan}
 ---
 [B2]{label_total}[>]{total}
 [?uang]Tunai[>]{uang}
-[?kembalian]Kembali[>]{kembalian}
+[?kembalian]{label_kembalian}[>]{kembalian}
 [?status_bayar]Bayar    : {status_bayar}
 ---
 Catatan:

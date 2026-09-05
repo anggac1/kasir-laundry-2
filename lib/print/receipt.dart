@@ -105,6 +105,7 @@ class Struk {
     '{status_bayar}': 'LUNAS / BELUM BAYAR, kosong bila disembunyikan',
     '{uang}': 'Uang diterima, kosong bila tidak diisi',
     '{kembalian}': 'Kembalian, kosong bila uang tidak diisi',
+    '{label_kembalian}': 'Kata "Kembali" atau "Kurang", ikut keadaan nota',
     '{total}': 'Total harga, selalu positif',
     '{label_total}': 'Tulisan TOTAL, jadi SISA SALDO bila minus',
     '{total_asli}': 'Total apa adanya, termasuk tanda minus',
@@ -248,7 +249,8 @@ class Struk {
     }
 
     final uang = n.uangDibayar;
-    final kembali = n.kembalian;
+    // Selalu positif; yang menyatakan arahnya {label_kembalian}.
+    final kembali = n.nilaiKembalian;
 
     return {
       ...ekstra,
@@ -268,6 +270,7 @@ class Struk {
       '{status_bayar}': StatusBayar.teksStruk(n.statusBayar),
       '{uang}': uang == null ? '' : rupiah(uang),
       '{kembalian}': kembali == null ? '' : rupiah(kembali),
+      '{label_kembalian}': kembali == null ? '' : n.labelKembalian,
       '{total}': rupiah(n.nilaiTampil),
       '{label_total}': n.labelTotal,
       '{total_asli}': rupiah(n.total),

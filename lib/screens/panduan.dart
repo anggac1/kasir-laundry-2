@@ -687,6 +687,27 @@ const _lanjutan = <_Butir>[
         '[?status_bayar].',
   ),
   _Butir(
+    'Uang pelanggan kurang dari tagihan',
+    ikon: Icons.money_off,
+    isi: 'Kalau uang yang diterima lebih kecil daripada total, struk tidak '
+        'menulis kembalian bertanda minus. Barisnya berubah sendiri jadi '
+        '"Kurang" dengan angka biasa.',
+    langkah: [
+      'Isi Uang diterima seperti biasa, walau kurang',
+      'Struk otomatis menulis "Kurang Rp10.000", bukan "Kembali -Rp10.000"',
+      'Kalau uangnya lebih, tulisannya kembali jadi "Kembali"',
+    ],
+    catatan: 'Di template, kata itu berasal dari {label_kembalian}. Jadi '
+        'barisnya ditulis:\n\n'
+        '  [?kembalian]{label_kembalian}[>]{kembalian}\n\n'
+        'Kalau Anda pernah mengubah template sendiri dan masih mengetik '
+        'kata "Kembali" apa adanya, gantilah dengan {label_kembalian} '
+        'supaya ikut berubah.\n\n'
+        'Ini berbeda dengan SISA SALDO. Sisa saldo berarti pelanggan '
+        'menitipkan uang lebih dari tagihan; "Kurang" berarti '
+        'pembayarannya belum cukup.',
+  ),
+  _Butir(
     'Saran nama pelanggan',
     ikon: Icons.person_search_outlined,
     isi: 'Mengetik nama akan memunculkan saran dari nota yang pernah dibuat, '

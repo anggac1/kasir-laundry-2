@@ -218,10 +218,14 @@ class _NotaDetailScreenState extends State<NotaDetailScreen> {
                       contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.payments_outlined),
                       title: const Text('Uang diterima'),
+                      // "kembali -Rp10.000" diganti "kurang Rp10.000":
+                      // tanda minus di angka uang gampang terbaca sebagai
+                      // salah hitung, padahal artinya pembayaran kurang.
                       subtitle: Text(n.uangDibayar == null
                           ? 'Tidak dicatat'
                           : '${rupiah(n.uangDibayar!)}'
-                              '  -  kembali ${rupiah(n.kembalian ?? 0)}'),
+                              '  -  ${n.labelKembalian.toLowerCase()} '
+                              '${rupiah(n.nilaiKembalian ?? 0)}'),
                       trailing: const Icon(Icons.edit_outlined, size: 18),
                       onTap: _ubahUang,
                     ),
